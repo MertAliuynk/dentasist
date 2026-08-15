@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bdh
+      POSTGRES_PASSWORD: bdh_dev_password
+      POSTGRES_DB: bdh
+    ports:
+      - "5432:5432"
+    volumes:
+      - bdh_pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bdh"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bdh_pgdata_dev:

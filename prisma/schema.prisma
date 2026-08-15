@@ -1,0 +1,1196 @@
+// Prisma schema — Dentasist
+// Money is always stored as Int in kuruş (TL minor unit) to avoid float rounding errors.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// SaaS / Tenant layer
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // İşletme Bilgileri / Fatura Bilgileri (Ayarlar)
+  phone                      String?
+  address                    String?
+  taxNumber                  String?
+  taxOffice                  String?
+  billingEmail               String?
+  billingAddress             String?
+  // Çalışma Saatleri: { mon: {open, close, closed}, tue: {...}, ... }
+  workingHours               Json?
+  // Randevu Ayarları
+  appointmentDurationMinutes Int     @default(30)
+  appointmentBufferMinutes   Int     @default(0)
+  // Hatırlatma (SMS) / Anamnez / Onam ayarları — toggles stored ahead of the
+  // features themselves (SMS Hizmetleri, Onam Formu) being built out.
+  smsRemindersEnabled        Boolean @default(false)
+  anamnezRequired            Boolean @default(false)
+  onamRequired               Boolean @default(false)
+
+  branches               Branch[]
+  users                  User[]
+  memberships            Membership[]
+  patients               Patient[]
+  doctors                Doctor[]
+  appointments           Appointment[]
+  treatments             Treatment[]
+  treatmentTypes         TreatmentType[]
+  treatmentCategories    TreatmentCategory[]
+  rooms                  Room[]
+  patientNotes           PatientNote[]
+  followUps              FollowUp[]
+  expenseCategories      ExpenseCategory[]
+  cashRegisterEntries    CashRegisterEntry[]
+  paymentPlans           PaymentPlan[]
+  auditLogs              AuditLog[]
+  subscription           Subscription?
+  supportAccessGrants    SupportAccessGrant[]
+  capabilityOverrides    UserCapabilityOverride[]
+  klinikler              Klinik[]
+  labPatients            LabPatient[]
+  labTreatments          LabTreatment[]
+  labTreatmentTypes      LabTreatmentType[]
+  toothColors            ToothColor[]
+  labStageCatalogs       LabStageCatalog[]
+  labExpenseCategories   LabExpenseCategory[]
+  labCashEntries         LabCashEntry[]
+  labNotifications       LabNotification[]
+  labFeedback            LabFeedback[]
+  appointmentBlocks      AppointmentBlock[]
+  supportTickets         SupportTicket[]
+  installmentAllocations InstallmentAllocation[]
+  stockCategories        StockCategory[]
+  suppliers              Supplier[]
+  stockProducts          StockProduct[]
+  stockMovements         StockMovement[]
+  patientConsentForms    PatientConsentForm[]
+  messageTemplates       MessageTemplate[]
+}
+
+model Branch {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  address        String?
+  phone          String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  memberships         Membership[]
+  patients            Patient[]
+  doctors             Doctor[]
+  appointments        Appointment[]
+  cashRegisterEntries CashRegisterEntry[]
+  paymentPlans        PaymentPlan[]
+  followUps           FollowUp[]
+  klinikler           Klinik[]
+  labCashEntries      LabCashEntry[]
+  rooms               Room[]
+  appointmentBlocks   AppointmentBlock[]
+  stockProducts       StockProduct[]
+  stockMovements      StockMovement[]
+
+  @@index([organizationId])
+}
+
+// Admin-configurable treatment rooms, shown on appointments in the calendar.
+model Room {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  branchId       String
+  branch         Branch       @relation(fields: [branchId], references: [id])
+  name           String
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  appointments      Appointment[]
+  appointmentBlocks AppointmentBlock[]
+
+  @@unique([organizationId, branchId, name])
+}
+
+enum ModuleKey {
+  DENTAL
+  MUHASEBE
+  LABORATUVAR
+}
+
+model Plan {
+  id           String      @id @default(cuid())
+  code         String      @unique
+  name         String
+  priceMonthly Int
+  modules      ModuleKey[]
+  maxBranches  Int?
+  maxUsers     Int?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+
+  subscriptions Subscription[]
+}
+
+enum SubscriptionStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIAL
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  organizationId   String             @unique
+  organization     Organization       @relation(fields: [organizationId], references: [id])
+  planId           String
+  plan             Plan               @relation(fields: [planId], references: [id])
+  status           SubscriptionStatus @default(PENDING_PAYMENT)
+  startedAt        DateTime?
+  currentPeriodEnd DateTime?
+  paymentStub      Json?
+  discountCodeId   String?
+  discountCode     DiscountCode?      @relation(fields: [discountCodeId], references: [id])
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  entitlements Entitlement[]
+}
+
+enum DiscountType {
+  PERCENT
+  AMOUNT
+}
+
+// Platform-admin-managed discount/coupon codes, optionally applied at
+// signup. There is no real payment processor yet (Subscription.paymentStub
+// is just a manual note), so applying a code doesn't compute real billing —
+// it records which code an org signed up under and lets the platform track
+// usage; actual invoicing/charging is still manual.
+model DiscountCode {
+  id        String       @id @default(cuid())
+  code      String       @unique
+  type      DiscountType
+  value     Int
+  maxUses   Int?
+  usedCount Int          @default(0)
+  active    Boolean      @default(true)
+  expiresAt DateTime?
+  createdAt DateTime     @default(now())
+
+  subscriptions Subscription[]
+}
+
+model Entitlement {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  module         ModuleKey
+  active         Boolean      @default(true)
+
+  @@unique([subscriptionId, module])
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js + User / Role
+// ---------------------------------------------------------------------------
+
+enum GlobalRole {
+  PATRON
+  SUBE_YONETICISI
+  DOKTOR
+  SEKRETER
+  TEKNISYEN
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String       @unique
+  phone          String?
+  passwordHash   String?
+  image          String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  memberships            Membership[]
+  doctorProfile          Doctor?
+  accounts               Account[]
+  sessions               Session[]
+  patientNotes           PatientNote[]
+  auditLogs              AuditLog[]
+  capabilityOverrides    UserCapabilityOverride[]
+  labStagesAdded         LabTreatmentStage[]
+  labNotifications       LabNotification[]
+  labFeedback            LabFeedback[]
+  favoriteTreatmentTypes UserFavoriteTreatmentType[]
+  supportTickets         SupportTicket[]
+  supportTicketMessages  SupportTicketMessage[]
+  consentFormsCreated    PatientConsentForm[]
+  messageTemplatesCreated MessageTemplate[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  branchId       String?
+  branch         Branch?      @relation(fields: [branchId], references: [id])
+  role           GlobalRole
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, branchId, role])
+  @@index([organizationId, branchId])
+}
+
+enum PermissionEffect {
+  GRANT
+  REVOKE
+}
+
+// A per-user override layered on top of that user's role-derived capability
+// set (see src/server/rbac/permissions.ts). Lets the Patron grant a specific
+// capability to one account beyond its role, or revoke one the role would
+// otherwise include, without changing the role itself. PATRON-role accounts
+// are never allowed overrides (enforced in the staffAdmin router) so the
+// org's root account can never be locked out of its own data.
+model UserCapabilityOverride {
+  id              String           @id @default(cuid())
+  organizationId  String
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capability      String
+  effect          PermissionEffect
+  createdByUserId String
+  createdAt       DateTime         @default(now())
+
+  @@unique([userId, capability])
+  @@index([organizationId, userId])
+}
+
+// ---------------------------------------------------------------------------
+// Dental domain
+// ---------------------------------------------------------------------------
+
+model Doctor {
+  id             String       @id @default(cuid())
+  userId         String       @unique
+  user           User         @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  branchId       String
+  branch         Branch       @relation(fields: [branchId], references: [id])
+  colorHex       String       @default("#4F46E5")
+  commissionRate Decimal      @default(0) @db.Decimal(5, 2)
+  title          String?
+  // Only set when this Doctor represents a Laboratuvar client ("Hekim") —
+  // groups them under an external dental clinic for debt/billing rollups.
+  // Null for ordinary Dental-module doctors.
+  klinikId       String?
+  klinik         Klinik?      @relation(fields: [klinikId], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  patientsAsPrimary   Patient[]
+  appointments        Appointment[]
+  treatments          Treatment[]
+  cashRegisterEntries CashRegisterEntry[]
+  labPatients         LabPatient[]
+  labTreatments       LabTreatment[]
+  appointmentBlocks   AppointmentBlock[]
+
+  @@index([organizationId, branchId])
+  @@index([klinikId])
+}
+
+model Patient {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  branchId         String
+  branch           Branch       @relation(fields: [branchId], references: [id])
+  fullName         String
+  phone            String
+  tcKimlikNo       String?
+  birthDate        DateTime?
+  // Free-text supplementary notes (kept for backward compatibility with
+  // existing data); the structured Q&A questionnaire lives in
+  // anamnesisAnswers below and is what the "Hasta Ekle" form now shows.
+  anamnesis        String?      @db.Text
+  anamnesisAnswers Json?
+  primaryDoctorId  String?
+  primaryDoctor    Doctor?      @relation(fields: [primaryDoctorId], references: [id])
+  deletedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  appointments        Appointment[]
+  treatments          Treatment[]
+  notes               PatientNote[]
+  paymentPlans        PaymentPlan[]
+  cashRegisterEntries CashRegisterEntry[]
+  followUps           FollowUp[]
+  companions          PatientCompanion[]
+  stockMovements      StockMovement[]
+  consentForms        PatientConsentForm[]
+
+  @@index([organizationId, branchId])
+  @@index([organizationId, tcKimlikNo])
+  @@index([organizationId, fullName])
+}
+
+// A record of an onam formu (informed consent form) generated/printed for
+// a patient — the form's actual content is a static template rendered
+// client-side (see src/lib/dental/consent-form-templates.ts), this table
+// just tracks which template was generated, for whom, and when, so the
+// patient page can show a dated history.
+model PatientConsentForm {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  patientId       String
+  patient         Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  templateKey     String
+  templateTitle   String
+  createdByUserId String
+  createdBy       User         @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime     @default(now())
+
+  @@index([organizationId, patientId])
+}
+
+enum MessageChannel {
+  SMS
+  WHATSAPP
+}
+
+// A reusable message template for the SMS/WhatsApp Hizmetleri pages.
+// Sending itself isn't wired to a provider yet — this just backs the
+// template-management UI (create/edit/delete per channel).
+model MessageTemplate {
+  id              String          @id @default(cuid())
+  organizationId  String
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  channel         MessageChannel
+  name            String
+  // Free text with {ad}, {randevu_tarihi}, {randevu_saati}, {hekim}, {klinik}
+  // placeholders — substituted client-side for preview purposes.
+  body            String          @db.Text
+  createdByUserId String?
+  createdBy       User?           @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([organizationId, channel])
+}
+
+// Refakatçi — an optional companion/escort recorded alongside a patient.
+model PatientCompanion {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  fullName  String
+  phone     String?
+  createdAt DateTime @default(now())
+
+  @@index([patientId])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  ARRIVED
+  NO_SHOW
+  POSTPONED
+  COMPLETED
+  CANCELED
+}
+
+model Appointment {
+  id                   String            @id @default(cuid())
+  organizationId       String
+  organization         Organization      @relation(fields: [organizationId], references: [id])
+  branchId             String
+  branch               Branch            @relation(fields: [branchId], references: [id])
+  patientId            String
+  patient              Patient           @relation(fields: [patientId], references: [id])
+  doctorId             String
+  doctor               Doctor            @relation(fields: [doctorId], references: [id])
+  roomId               String?
+  room                 Room?             @relation(fields: [roomId], references: [id])
+  startsAt             DateTime
+  endsAt               DateTime
+  status               AppointmentStatus @default(SCHEDULED)
+  note                 String?           @db.Text
+  treatmentDoneToggle  Boolean           @default(false)
+  // Set when marking the patient ARRIVED also completed a specific
+  // treatment in the same action (the dashboard's "Sıradaki Randevu" card
+  // lets the doctor pick which treatment the visit finished, instead of a
+  // separate context-free "Tedavi Bitti" button) — shown in Randevu Geçmişi.
+  completedTreatmentId String?           @unique
+  completedTreatment   Treatment?        @relation(fields: [completedTreatmentId], references: [id])
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@index([organizationId, doctorId, startsAt])
+  @@index([organizationId, branchId, startsAt])
+}
+
+// Admin/staff-created "saat kapama" — a blocked time range on a doctor's
+// and/or a room's calendar during which appointments can't be created.
+// Rendered as a background event on the calendar.
+model AppointmentBlock {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  branchId        String
+  branch          Branch       @relation(fields: [branchId], references: [id])
+  doctorId        String?
+  doctor          Doctor?      @relation(fields: [doctorId], references: [id])
+  roomId          String?
+  room            Room?        @relation(fields: [roomId], references: [id])
+  startsAt        DateTime
+  endsAt          DateTime
+  reason          String?
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+
+  @@index([organizationId, branchId, startsAt])
+  @@index([doctorId, startsAt])
+}
+
+enum TreatmentStatus {
+  PROPOSED
+  APPROVED
+  COMPLETED
+}
+
+// Admin-managed (not pre-seeded) — each org defines its own categories from
+// scratch under Ayarlar rather than picking from a fixed list.
+model TreatmentCategory {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  treatmentTypes TreatmentType[]
+
+  @@unique([organizationId, name])
+}
+
+enum TreatmentScope {
+  DIS_BAZLI
+  CENE_BAZLI
+}
+
+enum Jaw {
+  UST
+  ALT
+}
+
+model TreatmentType {
+  id             String             @id @default(cuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  name           String
+  categoryId     String?
+  category       TreatmentCategory? @relation(fields: [categoryId], references: [id])
+  scope          TreatmentScope     @default(DIS_BAZLI)
+  defaultPrice   Int?
+  deletedAt      DateTime?
+  createdAt      DateTime           @default(now())
+
+  treatments  Treatment[]
+  favoritedBy UserFavoriteTreatmentType[]
+
+  @@unique([organizationId, name])
+}
+
+// A personal "Favorilerim" shortlist on the Tedavi Ekle page — independent
+// of category, and different per account (not just Doktor accounts, so
+// Sekreter/Şube Yöneticisi accounts can keep their own shortlist too).
+model UserFavoriteTreatmentType {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  treatmentTypeId String
+  treatmentType   TreatmentType @relation(fields: [treatmentTypeId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([userId, treatmentTypeId])
+}
+
+model Treatment {
+  id              String          @id @default(cuid())
+  organizationId  String
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  patientId       String
+  patient         Patient         @relation(fields: [patientId], references: [id])
+  doctorId        String
+  doctor          Doctor          @relation(fields: [doctorId], references: [id])
+  treatmentTypeId String?
+  treatmentType   TreatmentType?  @relation(fields: [treatmentTypeId], references: [id])
+  name            String
+  toothNumber     Int?
+  jaw             Jaw?
+  status          TreatmentStatus @default(PROPOSED)
+  proposedAt      DateTime        @default(now())
+  approvedAt      DateTime?
+  completedAt     DateTime?
+  price           Int?
+  notes           String?         @db.Text
+  paymentPlanId   String?
+  paymentPlan     PaymentPlan?    @relation(fields: [paymentPlanId], references: [id])
+
+  completedByAppointment Appointment?
+
+  @@index([organizationId, patientId, status])
+}
+
+model PatientNote {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  authorUserId   String
+  author         User         @relation(fields: [authorUserId], references: [id])
+  body           String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, patientId])
+}
+
+enum FollowUpStatus {
+  PENDING
+  DONE
+}
+
+model FollowUp {
+  id              String         @id @default(cuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  branchId        String
+  branch          Branch         @relation(fields: [branchId], references: [id])
+  patientId       String
+  patient         Patient        @relation(fields: [patientId], references: [id])
+  reason          String
+  note            String?        @db.Text
+  status          FollowUpStatus @default(PENDING)
+  createdByUserId String
+  createdAt       DateTime       @default(now())
+  resolvedAt      DateTime?
+
+  @@index([organizationId, branchId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Stok Takibi (inventory) — Ürünler / Kategoriler / Tedarikçiler /
+// Stok Hareketleri (giriş-çıkış) / Ürün Kullanımları (a StockMovement of
+// type CIKIS with a patientId set — material used on a specific patient —
+// rather than a separate model, to avoid duplicating the same shape twice).
+// ---------------------------------------------------------------------------
+
+model StockCategory {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  products StockProduct[]
+
+  @@unique([organizationId, name])
+}
+
+model Supplier {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  phone          String?
+  email          String?
+  address        String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  products StockProduct[]
+
+  @@unique([organizationId, name])
+}
+
+model StockProduct {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  branchId       String
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  categoryId     String?
+  category       StockCategory? @relation(fields: [categoryId], references: [id])
+  supplierId     String?
+  supplier       Supplier?      @relation(fields: [supplierId], references: [id])
+  name           String
+  unit           String         @default("adet")
+  quantity       Int            @default(0)
+  criticalLevel  Int            @default(0)
+  unitPrice      Int?
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+
+  movements StockMovement[]
+
+  @@index([organizationId, branchId])
+}
+
+enum StockMovementType {
+  GIRIS
+  CIKIS
+}
+
+model StockMovement {
+  id              String            @id @default(cuid())
+  organizationId  String
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  productId       String
+  product         StockProduct      @relation(fields: [productId], references: [id])
+  branchId        String
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  type            StockMovementType
+  quantity        Int
+  patientId       String?
+  patient         Patient?          @relation(fields: [patientId], references: [id])
+  note            String?
+  createdByUserId String
+  createdAt       DateTime          @default(now())
+
+  @@index([organizationId, productId, createdAt])
+  @@index([organizationId, branchId])
+}
+
+// ---------------------------------------------------------------------------
+// Muhasebe domain
+// ---------------------------------------------------------------------------
+
+enum PaymentMethod {
+  NAKIT
+  HAVALE
+  KREDI_KARTI
+}
+
+enum CashEntryType {
+  GELIR
+  GIDER
+}
+
+model ExpenseCategory {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  deletedAt      DateTime?
+
+  cashRegisterEntries CashRegisterEntry[]
+
+  @@unique([organizationId, name])
+}
+
+model CashRegisterEntry {
+  id              String           @id @default(cuid())
+  organizationId  String
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  branchId        String
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  type            CashEntryType
+  method          PaymentMethod
+  amount          Int
+  categoryId      String?
+  category        ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  doctorId        String?
+  doctor          Doctor?          @relation(fields: [doctorId], references: [id])
+  patientId       String?
+  patient         Patient?         @relation(fields: [patientId], references: [id])
+  description     String?
+  entryDate       DateTime
+  createdByUserId String
+  createdAt       DateTime         @default(now())
+  deletedAt       DateTime?
+
+  allocations InstallmentAllocation[]
+
+  @@index([organizationId, branchId, entryDate])
+}
+
+enum PaymentPlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELED
+}
+
+model PaymentPlan {
+  id                String            @id @default(cuid())
+  organizationId    String
+  organization      Organization      @relation(fields: [organizationId], references: [id])
+  branchId          String
+  branch            Branch            @relation(fields: [branchId], references: [id])
+  patientId         String
+  patient           Patient           @relation(fields: [patientId], references: [id])
+  totalAmount       Int
+  installmentCount  Int
+  interestRate      Decimal           @default(0) @db.Decimal(5, 2)
+  startDate         DateTime
+  notes             String?           @db.Text
+  status            PaymentPlanStatus @default(DRAFT)
+  activatedAt       DateTime?
+  activatedByUserId String?
+  createdByUserId   String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  installments Installment[]
+  treatments   Treatment[]
+
+  @@index([organizationId, patientId])
+  @@index([organizationId, branchId, status])
+}
+
+enum InstallmentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+model Installment {
+  id            String            @id @default(cuid())
+  paymentPlanId String
+  paymentPlan   PaymentPlan       @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
+  sequence      Int
+  amount        Int
+  // Sum of allocations from cash entries applied to this installment — lets
+  // a single lump-sum payment be split across several installments (and the
+  // reverse: a partially-paid installment) instead of the old all-or-nothing
+  // single-installment-per-entry link.
+  paidAmount    Int               @default(0)
+  dueDate       DateTime
+  status        InstallmentStatus @default(UNPAID)
+  isLocked      Boolean           @default(false)
+  paidAt        DateTime?
+  paidMethod    PaymentMethod?
+  updatedAt     DateTime          @updatedAt
+
+  allocations InstallmentAllocation[]
+
+  @@unique([paymentPlanId, sequence])
+  @@index([paymentPlanId])
+}
+
+// Join row attributing part (or all) of a cash entry's amount to a specific
+// installment. Many-to-many by design: one lump-sum payment can settle
+// several installments, and (in principle) an installment could receive
+// payments from more than one entry over time.
+model InstallmentAllocation {
+  id                  String            @id @default(cuid())
+  organizationId      String
+  organization        Organization      @relation(fields: [organizationId], references: [id])
+  installmentId       String
+  installment         Installment       @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  cashRegisterEntryId String
+  cashRegisterEntry   CashRegisterEntry @relation(fields: [cashRegisterEntryId], references: [id], onDelete: Cascade)
+  amount              Int
+  createdAt           DateTime          @default(now())
+
+  @@index([installmentId])
+  @@index([cashRegisterEntryId])
+}
+
+// ---------------------------------------------------------------------------
+// Laboratuvar domain
+//
+// A different business shape than Dental/Muhasebe: the Organization here is
+// the dental LAB itself, and its paying customers are external dental
+// clinics ("Klinik"), each of which may have multiple dentist contacts
+// ("Hekim" — modeled as an ordinary Doctor row with klinikId set). A Hekim
+// submits prosthesis work orders (LabPatient + LabTreatment); Teknisyen
+// staff fabricate them through a back-and-forth chain of named stages
+// (LabTreatmentStage) until a Teknisyen marks the treatment finished. "Debt"
+// owed by a Hekim/Klinik is simply the sum of their completed treatments'
+// prices — there is no separate payment/installment ledger, matching what
+// was actually asked for (view debt, not collect it).
+// ---------------------------------------------------------------------------
+
+model Klinik {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  branchId       String
+  branch         Branch       @relation(fields: [branchId], references: [id])
+  name           String
+  phone          String?
+  address        String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  hekimler    Doctor[]
+  labPatients LabPatient[]
+
+  @@index([organizationId, branchId])
+}
+
+model LabPatient {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  klinikId       String
+  klinik         Klinik       @relation(fields: [klinikId], references: [id])
+  doctorId       String
+  doctor         Doctor       @relation(fields: [doctorId], references: [id])
+  fullName       String
+  note           String?      @db.Text
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  treatments LabTreatment[]
+
+  @@index([organizationId, klinikId])
+  @@index([organizationId, doctorId])
+}
+
+model LabTreatmentType {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  price          Int
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  treatments LabTreatment[]
+
+  @@unique([organizationId, name])
+}
+
+model ToothColor {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  deletedAt      DateTime?
+
+  treatments LabTreatment[]
+
+  @@unique([organizationId, name])
+}
+
+model LabStageCatalog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  deletedAt      DateTime?
+
+  stages LabTreatmentStage[]
+
+  @@unique([organizationId, name])
+}
+
+enum LabTreatmentStatus {
+  DEVAM_EDIYOR
+  TAMAMLANDI
+}
+
+model LabTreatment {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  organization       Organization       @relation(fields: [organizationId], references: [id])
+  labPatientId       String
+  labPatient         LabPatient         @relation(fields: [labPatientId], references: [id])
+  labTreatmentTypeId String
+  labTreatmentType   LabTreatmentType   @relation(fields: [labTreatmentTypeId], references: [id])
+  doctorId           String
+  doctor             Doctor             @relation(fields: [doctorId], references: [id])
+  toothColorId       String?
+  toothColor         ToothColor?        @relation(fields: [toothColorId], references: [id])
+  price              Int
+  status             LabTreatmentStatus @default(DEVAM_EDIYOR)
+  finishedByUserId   String?
+  createdAt          DateTime           @default(now())
+  completedAt        DateTime?
+
+  stages        LabTreatmentStage[]
+  feedback      LabFeedback[]
+  notifications LabNotification[]
+
+  @@index([organizationId, doctorId, status])
+  @@index([organizationId, labPatientId])
+}
+
+model LabTreatmentStage {
+  id             String          @id @default(cuid())
+  labTreatmentId String
+  labTreatment   LabTreatment    @relation(fields: [labTreatmentId], references: [id])
+  stageCatalogId String
+  stageCatalog   LabStageCatalog @relation(fields: [stageCatalogId], references: [id])
+  addedByUserId  String
+  addedByUser    User            @relation(fields: [addedByUserId], references: [id])
+  dueDate        DateTime
+  note           String?         @db.Text
+  createdAt      DateTime        @default(now())
+
+  @@index([labTreatmentId])
+}
+
+model LabNotification {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  recipientUserId String
+  recipient       User         @relation(fields: [recipientUserId], references: [id])
+  labTreatmentId  String
+  labTreatment    LabTreatment @relation(fields: [labTreatmentId], references: [id])
+  message         String
+  readAt          DateTime?
+  createdAt       DateTime     @default(now())
+
+  @@index([recipientUserId, readAt])
+}
+
+model LabFeedback {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  labTreatmentId String
+  labTreatment   LabTreatment @relation(fields: [labTreatmentId], references: [id])
+  authorUserId   String
+  author         User         @relation(fields: [authorUserId], references: [id])
+  message        String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
+model LabExpenseCategory {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  deletedAt      DateTime?
+
+  entries LabCashEntry[]
+
+  @@unique([organizationId, name])
+}
+
+enum LabCashEntryType {
+  GELIR
+  GIDER
+}
+
+model LabCashEntry {
+  id              String              @id @default(cuid())
+  organizationId  String
+  organization    Organization        @relation(fields: [organizationId], references: [id])
+  branchId        String
+  branch          Branch              @relation(fields: [branchId], references: [id])
+  type            LabCashEntryType
+  amount          Int
+  categoryId      String?
+  category        LabExpenseCategory? @relation(fields: [categoryId], references: [id])
+  description     String?
+  entryDate       DateTime
+  createdByUserId String
+  createdAt       DateTime            @default(now())
+
+  @@index([organizationId, branchId, entryDate])
+}
+
+// ---------------------------------------------------------------------------
+// Cross-cutting
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  actorUserId    String
+  actor          User         @relation(fields: [actorUserId], references: [id])
+  action         String
+  entityType     String
+  entityId       String
+  diff           Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, entityType, entityId])
+}
+
+enum SupportTicketStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  DUSUK
+  NORMAL
+  YUKSEK
+  ACIL
+}
+
+enum SupportTicketCategory {
+  TEKNIK
+  FATURALAMA
+  OZELLIK_TALEBI
+  DIGER
+}
+
+// A tenant-raised support ticket ("Destek Talebi"). Visible to the tenant
+// (their own org's tickets) and to platform staff (across all orgs), who can
+// reply — replies are just messages with an authorPlatformUserId instead of
+// an authorUserId.
+model SupportTicket {
+  id              String                @id @default(cuid())
+  organizationId  String
+  organization    Organization          @relation(fields: [organizationId], references: [id])
+  createdByUserId String
+  createdBy       User                  @relation(fields: [createdByUserId], references: [id])
+  subject         String
+  priority        SupportTicketPriority @default(NORMAL)
+  category        SupportTicketCategory @default(DIGER)
+  status          SupportTicketStatus   @default(OPEN)
+  createdIp       String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  messages SupportTicketMessage[]
+
+  @@index([organizationId, status])
+}
+
+model SupportTicketMessage {
+  id                   String        @id @default(cuid())
+  ticketId             String
+  ticket               SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUserId         String?
+  authorUser           User?         @relation(fields: [authorUserId], references: [id])
+  authorPlatformUserId String?
+  authorPlatformUser   PlatformUser? @relation(fields: [authorPlatformUserId], references: [id])
+  body                 String        @db.Text
+  createdIp            String?
+  createdAt            DateTime      @default(now())
+
+  @@index([ticketId])
+}
+
+// ---------------------------------------------------------------------------
+// Platform layer — internal staff (us), separate from tenant users entirely.
+// A compromised clinic account must never grant access to this layer.
+// ---------------------------------------------------------------------------
+
+enum PlatformRole {
+  OWNER
+  DEVELOPER
+  SUPPORT
+}
+
+model PlatformUser {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         PlatformRole
+  deletedAt    DateTime?
+  createdAt    DateTime     @default(now())
+
+  auditLogs             PlatformAuditLog[]
+  grantsReceived        SupportAccessGrant[]   @relation("GrantedTo")
+  grantsIssued          SupportAccessGrant[]   @relation("GrantedBy")
+  supportTicketMessages SupportTicketMessage[]
+}
+
+model PlatformAuditLog {
+  id             String       @id @default(cuid())
+  actorId        String
+  actor          PlatformUser @relation(fields: [actorId], references: [id])
+  action         String
+  organizationId String?
+  entityType     String?
+  entityId       String?
+  diff           Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+// A time-boxed, audited grant letting a SUPPORT rep view one clinic's
+// sensitive (patient/financial) data. OWNER/DEVELOPER don't need grants —
+// they always have full access.
+model SupportAccessGrant {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  grantedToId    String
+  grantedTo      PlatformUser @relation("GrantedTo", fields: [grantedToId], references: [id])
+  grantedById    String
+  grantedBy      PlatformUser @relation("GrantedBy", fields: [grantedById], references: [id])
+  reason         String?
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, expiresAt])
+  @@index([grantedToId, expiresAt])
+}
