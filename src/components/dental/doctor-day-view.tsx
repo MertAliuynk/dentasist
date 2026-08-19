@@ -47,8 +47,8 @@ type DoctorLike = { id: string; user: { name: string }; colorHex: string };
 // commercial license for production/commercial use — see the discussion
 // that led to this replacement). Only this single-day, per-doctor-column
 // view is custom; Month/Week still use FullCalendar's free plugins.
-// Trade-off accepted: no native drag-to-move/resize here (click-to-create
-// and click-to-open only) — full editing still works in Week/Month.
+// Drag-to-reschedule (including across doctor columns) is implemented with
+// the native HTML5 Drag and Drop API — no paid plugin, no extra dependency.
 export function DoctorDayView({
   date,
   doctors,
@@ -58,6 +58,7 @@ export function DoctorDayView({
   slotMaxHour = 20,
   onSlotClick,
   onEventClick,
+  onEventDrop,
 }: {
   date: Date;
   doctors: DoctorLike[];
@@ -67,6 +68,7 @@ export function DoctorDayView({
   slotMaxHour?: number;
   onSlotClick: (doctorId: string, start: Date, end: Date) => void;
   onEventClick: (appointmentId: string) => void;
+  onEventDrop?: (appointmentId: string, doctorId: string, start: Date, end: Date) => void;
 }) {
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hours = Array.from({ length: slotMaxHour - slotMinHour }, (_, i) => slotMinHour + i);
@@ -96,6 +98,35 @@ export function DoctorDayView({
     start.setMinutes(start.getMinutes() + snapped);
     const end = new Date(start.getTime() + 30 * 60 * 1000);
     onSlotClick(doctorId, start, end);
+  }
+
+  function snappedStartFromOffset(doctorId: string, clientY: number) {
+    const el = columnRefs.current[doctorId];
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const offsetY = clientY - rect.top;
+    const rawMinutes = (offsetY / HOUR_HEIGHT) * 60;
+    const snapped = Math.max(0, Math.round(rawMinutes / 15) * 15);
+    const start = new Date(date);
+    start.setHours(slotMinHour, 0, 0, 0);
+    start.setMinutes(start.getMinutes() + snapped);
+    return start;
+  }
+
+  function handleColumnDrop(doctorId: string, e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData("text/plain");
+    if (!raw) return;
+    let payload: { id: string; durationMs: number };
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const start = snappedStartFromOffset(doctorId, e.clientY);
+    if (!start) return;
+    const end = new Date(start.getTime() + payload.durationMs);
+    onEventDrop?.(payload.id, doctorId, start, end);
   }
 
   return (
@@ -130,6 +161,8 @@ export function DoctorDayView({
                 className="relative cursor-crosshair border-t border-border"
                 style={{ height: totalHeight }}
                 onClick={(e) => handleColumnClick(doctor.id, e)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleColumnDrop(doctor.id, e)}
               >
                 {hours.map((h, i) => (
                   <div
@@ -167,11 +200,20 @@ export function DoctorDayView({
                     <button
                       key={a.id}
                       type="button"
+                      draggable={!!onEventDrop}
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData(
+                          "text/plain",
+                          JSON.stringify({ id: a.id, durationMs: end.getTime() - start.getTime() }),
+                        );
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEventClick(a.id);
                       }}
-                      className={`absolute inset-x-0.5 z-10 flex flex-col overflow-hidden rounded-md px-1 py-0.5 text-left text-[11px] leading-tight text-white shadow-sm ${dimmed ? "opacity-45" : ""} ${a.status === "POSTPONED" ? "border border-dashed border-white/70" : ""}`}
+                      className={`absolute inset-x-0.5 z-10 flex flex-col overflow-hidden rounded-md px-1 py-0.5 text-left text-[11px] leading-tight text-white shadow-sm ${onEventDrop ? "cursor-grab active:cursor-grabbing" : ""} ${dimmed ? "opacity-45" : ""} ${a.status === "POSTPONED" ? "border border-dashed border-white/70" : ""}`}
                       style={{ top, height, backgroundColor: doctor.colorHex }}
                       title={[a.patient.fullName, `Durum: ${STATUS_LABEL[a.status] ?? a.status}`, a.note].filter(Boolean).join("\n")}
                     >

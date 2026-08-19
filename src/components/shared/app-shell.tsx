@@ -272,7 +272,11 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex print:hidden">
+      {/* Pinned to the viewport (sticky + fixed h-screen) instead of
+          stretching to match main's content height — otherwise a long page
+          drags the sidebar's bottom (incl. the logout menu) down with it,
+          requiring a page-scroll just to sign out. */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex print:hidden">
         {sidebarBody}
       </aside>
 

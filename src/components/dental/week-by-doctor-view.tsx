@@ -52,6 +52,7 @@ export function WeekByDoctorView({
   blocks,
   onSlotClick,
   onEventClick,
+  onEventDrop,
 }: {
   weekStart: Date;
   doctors: DoctorLike[];
@@ -59,6 +60,7 @@ export function WeekByDoctorView({
   blocks: BlockLike[];
   onSlotClick: (doctorId: string, date: Date) => void;
   onEventClick: (appointmentId: string) => void;
+  onEventDrop?: (appointmentId: string, doctorId: string, start: Date, end: Date) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
@@ -66,6 +68,27 @@ export function WeekByDoctorView({
     return d;
   });
   const today = new Date();
+
+  // Dropping onto a day-cell keeps the appointment's original time-of-day
+  // and just moves it to that day (and doctor, if dropped under a
+  // different doctor's row) — there's no hour-level grid here to snap to.
+  function handleDrop(doctorId: string, day: Date, e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData("text/plain");
+    if (!raw) return;
+    let payload: { id: string; startsAt: string; endsAt: string };
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const originalStart = new Date(payload.startsAt);
+    const durationMs = new Date(payload.endsAt).getTime() - originalStart.getTime();
+    const start = new Date(day);
+    start.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
+    const end = new Date(start.getTime() + durationMs);
+    onEventDrop?.(payload.id, doctorId, start, end);
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -88,6 +111,8 @@ export function WeekByDoctorView({
                 <div
                   key={i}
                   className={`flex min-h-40 flex-col rounded-md border p-1.5 ${isToday ? "border-primary/40 bg-primary/5" : "border-border"}`}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDrop(doctor.id, day, e)}
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-[11px] font-medium text-muted-foreground">
@@ -117,10 +142,22 @@ export function WeekByDoctorView({
                       <button
                         key={a.id}
                         type="button"
+                        draggable={!!onEventDrop}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData(
+                            "text/plain",
+                            JSON.stringify({
+                              id: a.id,
+                              startsAt: new Date(a.startsAt).toISOString(),
+                              endsAt: new Date(a.endsAt).toISOString(),
+                            }),
+                          );
+                        }}
                         onClick={() => onEventClick(a.id)}
                         className={`flex flex-col rounded px-1 py-0.5 text-left text-[10px] leading-tight text-white ${
-                          a.status === "NO_SHOW" || a.status === "CANCELED" ? "opacity-45" : ""
-                        }`}
+                          onEventDrop ? "cursor-grab active:cursor-grabbing" : ""
+                        } ${a.status === "NO_SHOW" || a.status === "CANCELED" ? "opacity-45" : ""}`}
                         style={{ backgroundColor: doctor.colorHex }}
                         title={`${a.patient.fullName} · ${formatTime(new Date(a.startsAt))} · ${STATUS_LABEL[a.status] ?? a.status}`}
                       >

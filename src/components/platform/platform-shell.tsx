@@ -51,7 +51,7 @@ export function PlatformShell({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
         <div className="flex items-center gap-2.5 px-3 py-4">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
             <ShieldCheck className="size-4" />
@@ -62,7 +62,7 @@ export function PlatformShell({
           </div>
         </div>
 
-        <nav className="flex-1 px-2">
+        <nav className="flex-1 overflow-y-auto px-2">
           <div className="flex flex-col gap-0.5">
             {navItems.map((item) => {
               const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);

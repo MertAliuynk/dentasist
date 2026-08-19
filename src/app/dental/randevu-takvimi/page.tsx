@@ -5,6 +5,9 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
+import resourcePlugin from "@fullcalendar/resource";
+import resourceDayGridPlugin from "@fullcalendar/resource-daygrid";
+import resourceTimeGridPlugin from "@fullcalendar/resource-timegrid";
 import type { DateSelectArg, EventClickArg, DatesSetArg, EventContentArg } from "@fullcalendar/core";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, CalendarOff, Check, X, Clock3 } from "lucide-react";
@@ -20,10 +23,20 @@ import {
 import { trpc } from "@/lib/trpc/client";
 import { AppointmentDialog } from "@/components/dental/appointment-dialog";
 import { CloseSlotDialog } from "@/components/dental/close-slot-dialog";
-import { DoctorDayView } from "@/components/dental/doctor-day-view";
-import { WeekByDoctorView } from "@/components/dental/week-by-doctor-view";
 
 const DOCTORS_PER_PAGE = 6;
+
+// Ay/Hafta/Gün — all three now use FullCalendar's Scheduler plugins
+// (resourceDayGridMonth / resourceTimeGridWeek / resourceTimeGridDay) for
+// non-doctor roles, giving every view the same native per-doctor-column
+// drag/resize. Scheduler requires a paid commercial license for production/
+// commercial use. This key is FullCalendar's own documented non-commercial/
+// evaluation key: it is NOT valid for a commercially-deployed product.
+// Before this app is sold/deployed to real clinics, either buy a Scheduler
+// license (fullcalendar.io/pricing) and swap this key for the purchased
+// one, or drop back to the free custom `DoctorDayView`/`WeekByDoctorView`
+// components (kept in the repo, just unused here) — do not ship this key as-is.
+const SCHEDULER_LICENSE_KEY = "CC-Attribution-NonCommercial-NoDerivatives";
 
 const STATUS_LABEL: Record<string, string> = {
   SCHEDULED: "Planlandı",
@@ -41,30 +54,6 @@ function StatusIcon({ status }: { status: string }) {
   return null;
 }
 
-function isoDay(d: Date) {
-  const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(d);
-  end.setHours(23, 59, 59, 999);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
-
-function startOfWeek(d: Date) {
-  const date = new Date(d);
-  const day = date.getDay();
-  const diff = (day === 0 ? -6 : 1) - day; // shift back to Monday
-  date.setDate(date.getDate() + diff);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function weekRangeIso(weekStart: Date) {
-  const start = new Date(weekStart);
-  const end = new Date(weekStart);
-  end.setDate(end.getDate() + 7);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
-
 function defaultSlotFor(date: Date) {
   const start = new Date(date);
   start.setHours(9, 0, 0, 0);
@@ -73,28 +62,29 @@ function defaultSlotFor(date: Date) {
   return { start, end };
 }
 
-function formatDayTitle(d: Date) {
-  return new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", weekday: "long" }).format(d);
-}
-
-function formatWeekTitle(weekStart: Date) {
-  const end = new Date(weekStart);
-  end.setDate(end.getDate() + 6);
-  const sameMonth = weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear();
-  const startFmt = new Intl.DateTimeFormat("tr-TR", sameMonth ? { day: "numeric" } : { day: "numeric", month: "long" });
-  const endFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric" });
-  return `${startFmt.format(weekStart)} – ${endFmt.format(end)}`;
-}
-
 function isDoctorOnlyClient(roles: string[]) {
   const set = new Set(roles);
   return set.size === 1 && set.has("DOKTOR");
 }
 
+type ViewKey = "dayGridMonth" | "timeGridWeek" | "doctorDay";
+
+// Internal view keys stay stable across roles (drives Select state); the
+// actual FullCalendar view name differs — non-doctor roles get the
+// resource-grouped variant of each.
+function resolveFcView(view: ViewKey, doctorOnly: boolean): string {
+  if (doctorOnly) return view;
+  if (view === "dayGridMonth") return "resourceDayGridMonth";
+  if (view === "timeGridWeek") return "resourceTimeGridWeek";
+  return "resourceTimeGridDay";
+}
+
 export default function AppointmentCalendarPage() {
   const calendarRef = useRef<FullCalendar>(null);
-  const [viewType, setViewType] = useState<string>("timeGridWeek");
-  const [anchorDate, setAnchorDate] = useState(() => new Date());
+  // null until the user explicitly switches views — lets the default view
+  // depend on role (resolved async via `me`) without an effect: see
+  // `viewType` below.
+  const [explicitViewType, setExplicitViewType] = useState<ViewKey | null>(null);
   const [range, setRange] = useState<{ start: string; end: string } | null>(null);
   const [title, setTitle] = useState("");
   const [doctorPage, setDoctorPage] = useState(0);
@@ -109,37 +99,18 @@ export default function AppointmentCalendarPage() {
   const doctorOnly = me ? isDoctorOnlyClient(me.memberships.map((m) => m.role)) : undefined;
   const myDoctor = useMemo(() => doctors?.find((d) => d.user.id === me?.id), [doctors, me]);
 
-  const isDoctorDay = viewType === "doctorDay" && !doctorOnly;
-  const isDoctorWeek = viewType === "timeGridWeek" && doctorOnly === false;
-  // A manually-managed (non-FullCalendar) view: our own custom grid/day
-  // component drives its own date range instead of FullCalendar's datesSet.
-  const isManagedView = isDoctorDay || isDoctorWeek;
-
-  // Managed views (day/week-by-doctor) don't go through FullCalendar's
-  // datesSet callback, so their range/title are derived straight from
-  // anchorDate + the active view instead of a FullCalendar-driven state.
-  const managedRange = useMemo(() => {
-    if (viewType === "doctorDay" && !doctorOnly) return isoDay(anchorDate);
-    if (viewType === "timeGridWeek" && doctorOnly === false) return weekRangeIso(startOfWeek(anchorDate));
-    return null;
-  }, [viewType, anchorDate, doctorOnly]);
-
-  const managedTitle = useMemo(() => {
-    if (viewType === "doctorDay" && !doctorOnly) return formatDayTitle(anchorDate);
-    if (viewType === "timeGridWeek" && doctorOnly === false) return formatWeekTitle(startOfWeek(anchorDate));
-    return null;
-  }, [viewType, anchorDate, doctorOnly]);
-
-  const effectiveRange = managedRange ?? range;
-  const effectiveTitle = managedTitle ?? title;
+  // Non-doctor roles default to "Gün (Hekimler)" — the per-doctor-column
+  // hourly grid — since that's the view they actually want to see first;
+  // doctor-only accounts default to their own creatable week calendar.
+  const viewType: ViewKey = explicitViewType ?? (doctorOnly ? "timeGridWeek" : "doctorDay");
 
   const { data: appointments } = trpc.appointment.listRange.useQuery(
-    { start: effectiveRange?.start ?? "", end: effectiveRange?.end ?? "" },
-    { enabled: !!effectiveRange },
+    { start: range?.start ?? "", end: range?.end ?? "" },
+    { enabled: !!range },
   );
   const { data: blocks } = trpc.appointmentBlock.listRange.useQuery(
-    { start: effectiveRange?.start ?? "", end: effectiveRange?.end ?? "" },
-    { enabled: !!effectiveRange },
+    { start: range?.start ?? "", end: range?.end ?? "" },
+    { enabled: !!range },
   );
 
   const reschedule = trpc.appointment.reschedule.useMutation({
@@ -178,6 +149,7 @@ export default function AppointmentCalendarPage() {
     () =>
       (appointments ?? []).map((a) => ({
         id: a.id,
+        resourceId: a.doctorId,
         title: a.room ? `${a.patient.fullName} · ${a.room.name}` : a.patient.fullName,
         start: a.startsAt,
         end: a.endsAt,
@@ -191,6 +163,28 @@ export default function AppointmentCalendarPage() {
       })),
     [appointments],
   );
+
+  // "Saat Kapat" blocks, rendered as FullCalendar background events (tinted,
+  // non-interactive, non-draggable) rather than real appointments. A block
+  // with no specific doctorId applies org/branch-wide, so on a resource view
+  // it needs to be duplicated across every currently-visible doctor column;
+  // on the doctor-only calendar there's only ever one implicit column.
+  const blockEvents = useMemo(() => {
+    return (blocks ?? []).flatMap((b) => {
+      const base = {
+        title: b.reason || "Kapalı",
+        start: b.startsAt,
+        end: b.endsAt,
+        display: "background" as const,
+        backgroundColor: "var(--color-muted-foreground)",
+        editable: false,
+      };
+      if (doctorOnly || b.doctorId) {
+        return [{ ...base, id: `block-${b.id}`, resourceId: b.doctorId ?? undefined }];
+      }
+      return pagedDoctors.map((d) => ({ ...base, id: `block-${b.id}-${d.id}`, resourceId: d.id }));
+    });
+  }, [blocks, doctorOnly, pagedDoctors]);
 
   const selectedAppointment = appointments?.find((a) => a.id === selectedAppointmentId);
 
@@ -206,18 +200,50 @@ export default function AppointmentCalendarPage() {
     setSelectedAppointmentId(arg.event.id);
   }
 
+  // A day-cell click in Month view selects the whole day (`allDay`), which
+  // isn't a usable appointment slot — normalize it to a default 09:00 start
+  // instead of passing a 24h range through.
+  function normalizeSelection(arg: DateSelectArg) {
+    return arg.allDay ? defaultSlotFor(arg.start) : { start: arg.start, end: arg.end };
+  }
+
   function handleSelect(arg: DateSelectArg) {
-    setCreateSlot({ start: arg.start, end: arg.end, doctorId: myDoctor?.id });
+    const { start, end } = normalizeSelection(arg);
+    setCreateSlot({ start, end, doctorId: myDoctor?.id });
     calendarRef.current?.getApi().unselect();
+  }
+
+  // Resource views' select/eventDrop args carry a `resource` (the
+  // clicked-on column) — not part of the base FullCalendar types, so read
+  // it defensively rather than importing the Scheduler-specific type.
+  function handleResourceSelect(arg: DateSelectArg) {
+    const resourceId = (arg as unknown as { resource?: { id: string } }).resource?.id;
+    const { start, end } = normalizeSelection(arg);
+    setCreateSlot({ start, end, doctorId: resourceId });
+    calendarRef.current?.getApi().unselect();
+  }
+
+  function handleResourceEventChange(arg: {
+    event: { id: string; start: Date | null; end: Date | null };
+    newResource?: { id: string } | null;
+  }) {
+    reschedule.mutate({
+      id: arg.event.id,
+      startsAt: arg.event.start!.toISOString(),
+      endsAt: (arg.event.end ?? arg.event.start!).toISOString(),
+      doctorId: arg.newResource?.id,
+    });
   }
 
   function handleDatesSet(arg: DatesSetArg) {
     setRange({ start: arg.startStr, end: arg.endStr });
     setTitle(arg.view.title);
-    setAnchorDate(new Date(arg.view.currentStart));
   }
 
   function renderEventContent(arg: EventContentArg) {
+    // Background events ("Saat Kapat" blocks) just tint the slot — no card
+    // content, let FullCalendar render its default (empty) background.
+    if (arg.event.display === "background") return undefined;
     const { status, note } = arg.event.extendedProps as { status: string; note: string | null };
     return (
       <div className="flex flex-col gap-0.5 overflow-hidden px-0.5 text-[11px] leading-tight">
@@ -230,7 +256,14 @@ export default function AppointmentCalendarPage() {
     );
   }
 
-  function handleEventDidMount(arg: { event: { extendedProps: Record<string, unknown>; start: Date | null }; el: HTMLElement }) {
+  function handleEventDidMount(arg: {
+    event: { display?: string; title: string; extendedProps: Record<string, unknown>; start: Date | null };
+    el: HTMLElement;
+  }) {
+    if (arg.event.display === "background") {
+      arg.el.title = arg.event.title || "Kapalı";
+      return;
+    }
     const status = arg.event.extendedProps.status as string;
     const note = arg.event.extendedProps.note as string | null;
     const doctorName = arg.event.extendedProps.doctorName as string;
@@ -244,44 +277,29 @@ export default function AppointmentCalendarPage() {
   }
 
   function goPrev() {
-    if (isManagedView) {
-      const d = new Date(anchorDate);
-      d.setDate(d.getDate() - (isDoctorDay ? 1 : 7));
-      setAnchorDate(d);
-    } else {
-      calendarRef.current?.getApi().prev();
-    }
+    calendarRef.current?.getApi().prev();
   }
 
   function goNext() {
-    if (isManagedView) {
-      const d = new Date(anchorDate);
-      d.setDate(d.getDate() + (isDoctorDay ? 1 : 7));
-      setAnchorDate(d);
-    } else {
-      calendarRef.current?.getApi().next();
-    }
+    calendarRef.current?.getApi().next();
   }
 
   function goToday() {
-    setAnchorDate(new Date());
-    if (!isManagedView) {
-      calendarRef.current?.getApi().today();
-    }
+    calendarRef.current?.getApi().today();
   }
 
   function handleViewChange(v: string) {
-    setViewType(v);
+    const next = v as ViewKey;
+    setExplicitViewType(next);
     setDoctorPage(0);
-    if (v === "dayGridMonth" || (v === "timeGridWeek" && doctorOnly)) {
-      // Give FullCalendar a tick to mount before switching its view.
-      setTimeout(() => calendarRef.current?.getApi().changeView(v), 0);
-    }
+    calendarRef.current?.getApi().changeView(resolveFcView(next, !!doctorOnly));
   }
 
   if (!me || doctorOnly === undefined) {
     return <div className="py-16 text-center text-sm text-muted-foreground">Yükleniyor…</div>;
   }
+
+  const noDoctors = !doctorOnly && pagedDoctors.length === 0;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -291,7 +309,7 @@ export default function AppointmentCalendarPage() {
           Saat Kapat
         </Button>
 
-        {(isDoctorDay || isDoctorWeek) && doctors && doctors.length > DOCTORS_PER_PAGE && (
+        {!doctorOnly && doctors && doctors.length > DOCTORS_PER_PAGE && (
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -332,7 +350,7 @@ export default function AppointmentCalendarPage() {
                 <ChevronRight className="size-4" />
               </Button>
             </div>
-            <p className="order-first w-full text-center text-sm font-medium sm:order-0 sm:w-auto sm:flex-1">{effectiveTitle}</p>
+            <p className="order-first w-full text-center text-sm font-medium sm:order-0 sm:w-auto sm:flex-1">{title}</p>
             <Select value={viewType} onValueChange={(v) => v && handleViewChange(v)}>
               <SelectTrigger className="w-40">
                 <SelectValue>{(value: string) => VIEW_OPTIONS.find((o) => o.value === value)?.label}</SelectValue>
@@ -347,53 +365,33 @@ export default function AppointmentCalendarPage() {
             </Select>
           </div>
 
-          {isDoctorDay ? (
-            pagedDoctors.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">
-                Bu görünüm için önce Yönetim&apos;den bir hekim ekleyin.
-              </p>
-            ) : (
-              <DoctorDayView
-                date={anchorDate}
-                doctors={pagedDoctors}
-                appointments={appointments ?? []}
-                blocks={blocks ?? []}
-                onSlotClick={(doctorId, start, end) => setCreateSlot({ start, end, doctorId })}
-                onEventClick={(id) => setSelectedAppointmentId(id)}
-              />
-            )
-          ) : isDoctorWeek ? (
-            pagedDoctors.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">
-                Bu görünüm için önce Yönetim&apos;den bir hekim ekleyin.
-              </p>
-            ) : (
-              <WeekByDoctorView
-                weekStart={startOfWeek(anchorDate)}
-                doctors={pagedDoctors}
-                appointments={appointments ?? []}
-                blocks={blocks ?? []}
-                onSlotClick={(doctorId, date) => setCreateSlot({ ...defaultSlotFor(date), doctorId })}
-                onEventClick={(id) => setSelectedAppointmentId(id)}
-              />
-            )
+          {noDoctors ? (
+            <p className="py-16 text-center text-sm text-muted-foreground">
+              Bu görünüm için önce Yönetim&apos;den bir hekim ekleyin.
+            </p>
           ) : (
             <div className="overflow-x-auto">
-              <div className="min-w-140">
+              <div style={doctorOnly ? { minWidth: "35rem" } : { minWidth: `${Math.max(pagedDoctors.length * 11, 35)}rem` }}>
                 <FullCalendar
                   ref={calendarRef}
-                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                  initialView="timeGridWeek"
+                  schedulerLicenseKey={doctorOnly ? undefined : SCHEDULER_LICENSE_KEY}
+                  plugins={
+                    doctorOnly
+                      ? [dayGridPlugin, timeGridPlugin, interactionPlugin]
+                      : [resourcePlugin, resourceDayGridPlugin, resourceTimeGridPlugin, interactionPlugin]
+                  }
+                  initialView={resolveFcView(viewType, !!doctorOnly)}
+                  resources={doctorOnly ? undefined : pagedDoctors.map((d) => ({ id: d.id, title: d.user.name }))}
                   headerToolbar={false}
                   locale="tr"
                   firstDay={1}
                   editable
-                  selectable={!!doctorOnly}
-                  select={doctorOnly ? handleSelect : undefined}
-                  events={events}
+                  selectable
+                  select={doctorOnly ? handleSelect : handleResourceSelect}
+                  events={[...events, ...blockEvents]}
                   eventContent={renderEventContent}
                   eventDidMount={handleEventDidMount}
-                  eventDrop={handleEventChange}
+                  eventDrop={doctorOnly ? handleEventChange : handleResourceEventChange}
                   eventResize={handleEventChange}
                   eventClick={handleEventClick}
                   datesSet={handleDatesSet}

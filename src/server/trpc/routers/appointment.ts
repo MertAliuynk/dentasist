@@ -186,18 +186,31 @@ export const appointmentRouter = router({
   reschedule: protectedProcedure
     .use(requireEntitlement("DENTAL"))
     .use(requireCapability("dental:appointment:write"))
-    .input(z.object({ id: z.string(), startsAt: z.string(), endsAt: z.string() }))
+    .input(z.object({ id: z.string(), startsAt: z.string(), endsAt: z.string(), doctorId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.user.organizationId;
       const existing = await ctx.db.appointment.findFirst({
-        where: { id: input.id, ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds) },
-        select: { doctorId: true, roomId: true },
+        where: { id: input.id, ...branchScopeWhere(organizationId, ctx.accessibleBranchIds) },
+        select: { doctorId: true, roomId: true, branchId: true },
       });
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
 
+      // Dragging an appointment onto a different doctor's column/row
+      // reassigns it — only within the same branch the appointment (and the
+      // dragged-to doctor) already belong to.
+      let nextDoctorId = existing.doctorId;
+      if (input.doctorId && input.doctorId !== existing.doctorId) {
+        const doctor = await ctx.db.doctor.findFirst({
+          where: { id: input.doctorId, organizationId, branchId: existing.branchId, deletedAt: null },
+        });
+        if (!doctor) throw new TRPCError({ code: "NOT_FOUND", message: "Hekim bulunamadı." });
+        nextDoctorId = doctor.id;
+      }
+
       await assertNotBlocked(
         ctx.db,
-        ctx.session.user.organizationId,
-        existing.doctorId,
+        organizationId,
+        nextDoctorId,
         existing.roomId,
         new Date(input.startsAt),
         new Date(input.endsAt),
@@ -206,9 +219,13 @@ export const appointmentRouter = router({
       const { count } = await ctx.db.appointment.updateMany({
         where: {
           id: input.id,
-          ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
+          ...branchScopeWhere(organizationId, ctx.accessibleBranchIds),
         },
-        data: { startsAt: new Date(input.startsAt), endsAt: new Date(input.endsAt) },
+        data: {
+          startsAt: new Date(input.startsAt),
+          endsAt: new Date(input.endsAt),
+          doctorId: nextDoctorId,
+        },
       });
       if (count === 0) throw new TRPCError({ code: "NOT_FOUND" });
       return { success: true };
