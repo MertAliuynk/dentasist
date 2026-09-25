@@ -22,14 +22,18 @@ import {
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc/client";
 import { PhoneInput } from "@/components/shared/phone-input";
+import { AnamnesisForm } from "@/components/dental/anamnesis-form";
+import type { AnamnesisAnswers } from "@/lib/dental/anamnesis-questions";
 
 type PatientLike = {
   id: string;
   fullName: string;
   phone: string;
+  branchId: string;
   tcKimlikNo: string | null;
   birthDate: string | Date | null;
   anamnesis: string | null;
+  anamnesisAnswers: unknown;
   primaryDoctorId: string | null;
 };
 
@@ -45,13 +49,18 @@ function PatientEditForm({
 }) {
   const [fullName, setFullName] = useState(patient.fullName);
   const [phone, setPhone] = useState(patient.phone);
+  const [branchId, setBranchId] = useState(patient.branchId);
   const [tcKimlikNo, setTcKimlikNo] = useState(patient.tcKimlikNo ?? "");
   const [birthDate, setBirthDate] = useState(
     patient.birthDate ? new Date(patient.birthDate).toISOString().slice(0, 10) : "",
   );
   const [anamnesis, setAnamnesis] = useState(patient.anamnesis ?? "");
+  const [anamnesisAnswers, setAnamnesisAnswers] = useState<AnamnesisAnswers>(
+    (patient.anamnesisAnswers as AnamnesisAnswers | null) ?? {},
+  );
   const [primaryDoctorId, setPrimaryDoctorId] = useState(patient.primaryDoctorId ?? "");
 
+  const { data: branches } = trpc.branch.list.useQuery();
   const { data: doctors } = trpc.doctor.list.useQuery();
   const utils = trpc.useUtils();
 
@@ -69,7 +78,7 @@ function PatientEditForm({
       <DialogHeader>
         <DialogTitle>Hasta Bilgilerini Düzenle</DialogTitle>
       </DialogHeader>
-      <div className="space-y-4">
+      <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
         <div className="space-y-2">
           <Label>Ad Soyad</Label>
           <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
@@ -78,6 +87,25 @@ function PatientEditForm({
           <Label>Telefon</Label>
           <PhoneInput defaultValue={phone} onChange={setPhone} />
         </div>
+        {branches && branches.length > 1 && (
+          <div className="space-y-2">
+            <Label>Şube</Label>
+            <Select value={branchId} onValueChange={(v) => v && setBranchId(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Şube seçin">
+                  {(value: string) => branches?.find((b) => b.id === value)?.name}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-2">
           <Label>İlgili Doktor</Label>
           <Select value={primaryDoctorId} onValueChange={(v) => setPrimaryDoctorId(v ?? "")}>
@@ -104,8 +132,12 @@ function PatientEditForm({
           <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
         </div>
         <div className="space-y-2">
+          <Label>Eski Not (serbest metin, opsiyonel)</Label>
+          <Textarea value={anamnesis} onChange={(e) => setAnamnesis(e.target.value)} rows={2} />
+        </div>
+        <div className="space-y-2">
           <Label>Anamnez</Label>
-          <Textarea value={anamnesis} onChange={(e) => setAnamnesis(e.target.value)} rows={3} />
+          <AnamnesisForm answers={anamnesisAnswers} onChange={setAnamnesisAnswers} />
         </div>
       </div>
       <DialogFooter>
@@ -119,10 +151,12 @@ function PatientEditForm({
               id: patient.id,
               fullName: fullName.trim(),
               phone: phone.trim(),
+              branchId: branchId !== patient.branchId ? branchId : undefined,
               primaryDoctorId: primaryDoctorId || null,
               tcKimlikNo: tcKimlikNo || undefined,
               birthDate: birthDate || null,
               anamnesis: anamnesis || null,
+              anamnesisAnswers,
             })
           }
         >
@@ -144,7 +178,7 @@ export function PatientEditDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         {open && <PatientEditForm patient={patient} onOpenChange={onOpenChange} />}
       </DialogContent>
     </Dialog>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { ClipboardList } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -131,7 +132,15 @@ export function PatientFinanceClient({ patientId }: { patientId: string }) {
             <CardTitle className="text-sm">SMS Gönder</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="py-6 text-center text-xs text-muted-foreground">Bu özellik yakında eklenecek.</p>
+            <p className="pb-3 text-xs text-muted-foreground">Ödeme hatırlatması vb. için hastaya mesaj gönderin.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dental/sms-hizmetleri?hasta=${patientId}`} />}>
+                SMS Gönder
+              </Button>
+              <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dental/whatsapp-hizmetleri?hasta=${patientId}`} />}>
+                WhatsApp
+              </Button>
+            </div>
           </CardContent>
         </Card>
         <Card>

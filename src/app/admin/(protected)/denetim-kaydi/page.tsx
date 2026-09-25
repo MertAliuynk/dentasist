@@ -2,16 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { platformTrpc } from "@/lib/platform-trpc/client";
+import { PLATFORM_ACTION_LABEL as ACTION_LABEL } from "@/components/platform/platform-format";
 
-const ACTION_LABEL: Record<string, string> = {
-  "org.sensitive_peek": "Hassas veri görüntülendi",
-  "org.subscription_updated": "Abonelik güncellendi",
-  "staff.created": "Ekip üyesi eklendi",
-  "staff.deactivated": "Ekip üyesi devre dışı bırakıldı",
-  "grant.issued": "Geçici erişim verildi",
-  "grant.revoked": "Geçici erişim iptal edildi",
-  "plan.updated": "Plan güncellendi",
-};
 
 function formatDate(date: string | Date) {
   return new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(date));

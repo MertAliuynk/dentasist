@@ -32,10 +32,12 @@ const DOCTORS_PER_PAGE = 6;
 // drag/resize. Scheduler requires a paid commercial license for production/
 // commercial use. This key is FullCalendar's own documented non-commercial/
 // evaluation key: it is NOT valid for a commercially-deployed product.
-// Before this app is sold/deployed to real clinics, either buy a Scheduler
-// license (fullcalendar.io/pricing) and swap this key for the purchased
-// one, or drop back to the free custom `DoctorDayView`/`WeekByDoctorView`
-// components (kept in the repo, just unused here) — do not ship this key as-is.
+// Before this app is sold/deployed to real clinics, buy a Scheduler license
+// (fullcalendar.io/pricing) and swap this key for the purchased one — the
+// free custom per-doctor-column views this replaced (DoctorDayView /
+// WeekByDoctorView) were deleted as dead code, so reverting to the free
+// plugins means rebuilding those, not just swapping a render branch back.
+// Do not ship this key as-is.
 const SCHEDULER_LICENSE_KEY = "CC-Attribution-NonCommercial-NoDerivatives";
 
 const STATUS_LABEL: Record<string, string> = {

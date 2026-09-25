@@ -1,12 +1,7 @@
-import { FileText } from "lucide-react";
-import { PageStub } from "@/components/shared/page-stub";
+import { notFound } from "next/navigation";
 
+// Hidden until built: Faturalar — hasta bazlı fatura geçmişi; e-Fatura entegrasyonuyla birlikte gelecek.
+// Removed from the nav too (src/lib/nav) — restore both together.
 export default function DentalFaturalarPage() {
-  return (
-    <PageStub
-      icon={FileText}
-      title="Faturalar"
-      description="Hasta bazlı fatura geçmişi ve fatura oluşturma — e-Fatura entegrasyonuyla birlikte gelecek."
-    />
-  );
+  notFound();
 }

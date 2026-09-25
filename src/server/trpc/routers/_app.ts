@@ -26,7 +26,9 @@ import { supportTicketRouter } from "@/server/trpc/routers/supportTicket";
 import { labRouter } from "@/server/trpc/routers/lab";
 import { stockRouter } from "@/server/trpc/routers/stock";
 import { messageTemplateRouter } from "@/server/trpc/routers/messageTemplate";
+import { messagingRouter } from "@/server/trpc/routers/messaging";
 import { patientConsentFormRouter } from "@/server/trpc/routers/patientConsentForm";
+import { patientXrayRouter } from "@/server/trpc/routers/patientXray";
 
 export const appRouter = router({
   plan: planRouter,
@@ -53,7 +55,9 @@ export const appRouter = router({
   lab: labRouter,
   stock: stockRouter,
   messageTemplate: messageTemplateRouter,
+  messaging: messagingRouter,
   patientConsentForm: patientConsentFormRouter,
+  patientXray: patientXrayRouter,
   organization: organizationRouter,
   auditLog: auditLogRouter,
   supportTicket: supportTicketRouter,

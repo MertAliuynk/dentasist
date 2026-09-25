@@ -48,14 +48,18 @@ export default function PatientListPage() {
 
   const { data: branches } = trpc.branch.list.useQuery();
   const { data: doctors } = trpc.doctor.list.useQuery();
-  const { data, isLoading } = trpc.patient.list.useQuery({
-    search,
-    branchId: branchId === ALL ? undefined : branchId,
-    doctorId: doctorId === ALL ? undefined : doctorId,
-    sortBy,
-    sortDir,
-    limit: 50,
-  });
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = trpc.patient.list.useInfiniteQuery(
+    {
+      search,
+      branchId: branchId === ALL ? undefined : branchId,
+      doctorId: doctorId === ALL ? undefined : doctorId,
+      sortBy,
+      sortDir,
+      limit: 50,
+    },
+    { getNextPageParam: (last) => last.nextCursor },
+  );
+  const patients = data?.pages.flatMap((p) => p.patients) ?? [];
   const utils = trpc.useUtils();
 
   const remove = trpc.patient.delete.useMutation({
@@ -136,7 +140,7 @@ export default function PatientListPage() {
 
           {isLoading ? (
             <p className="py-10 text-center text-sm text-muted-foreground">Yükleniyor…</p>
-          ) : !data || data.patients.length === 0 ? (
+          ) : patients.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">Kayıt bulunamadı.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -151,7 +155,7 @@ export default function PatientListPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.patients.map((p) => (
+                  {patients.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell>
                         <Link href={`/dental/hastalar/${p.id}`} className="hover:underline">
@@ -181,6 +185,13 @@ export default function PatientListPage() {
                   ))}
                 </TableBody>
               </Table>
+              {hasNextPage && (
+                <div className="pt-3 text-center">
+                  <Button variant="outline" size="sm" disabled={isFetchingNextPage} onClick={() => fetchNextPage()}>
+                    {isFetchingNextPage ? "Yükleniyor…" : "Daha Fazla Yükle"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

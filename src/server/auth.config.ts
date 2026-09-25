@@ -21,6 +21,7 @@ export const authConfig = {
       session.user.memberships = token.memberships ?? [];
       session.user.entitlements = token.entitlements ?? [];
       session.user.capabilityOverrides = token.capabilityOverrides ?? [];
+      session.user.subscription = token.subscription ?? null;
       return session;
     },
   },

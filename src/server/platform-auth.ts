@@ -12,6 +12,8 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+const CLAIMS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
 // Deliberately no PrismaAdapter: Credentials + JWT doesn't need database
 // session persistence, and NOT wiring PlatformUser into an adapter means
 // this table can never be touched by anything except this file and the
@@ -46,15 +48,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     ...platformAuthConfig.callbacks,
+    // Refreshed at sign-in and every CLAIMS_REFRESH_INTERVAL_MS after —
+    // same reasoning as the tenant-side jwt callback in auth.ts: bounds
+    // how long a role change or a deactivated platform account can stay
+    // live in an existing session, without hitting the DB every request.
     jwt: async ({ token, user }) => {
-      if (!user) return token;
+      const userId = user?.id ?? token.sub;
+      if (!userId) return token;
 
-      const platformUser = await db.platformUser.findUnique({ where: { id: user.id } });
+      const isStale = typeof token.refreshedAt !== "number" || Date.now() - token.refreshedAt > CLAIMS_REFRESH_INTERVAL_MS;
+      if (!user && !isStale) return token;
+
+      const platformUser = await db.platformUser.findUnique({ where: { id: userId } });
       if (!platformUser || platformUser.deletedAt) return {};
 
       token.name = platformUser.name;
       token.email = platformUser.email;
       token.platformRole = platformUser.role;
+      token.refreshedAt = Date.now();
       return token;
     },
   },

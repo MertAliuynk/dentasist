@@ -3,6 +3,31 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, requireEntitlement, requireCapability } from "@/server/trpc/trpc";
 import { branchScopeWhere, type AccessibleBranches } from "@/server/rbac/scope";
 import { logAudit } from "@/server/services/audit";
+import type { db as Db } from "@/server/db";
+
+// Ayarlar → "Tedavi onayından önce onam formu zorunlu olsun": when on, a
+// treatment can only move to APPROVED if its patient has at least one
+// onam formu on record (any template — the clinic picks which applies).
+async function assertConsentIfRequired(db: typeof Db, organizationId: string, patientIds: string[]) {
+  if (patientIds.length === 0) return;
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { onamRequired: true } });
+  if (!org?.onamRequired) return;
+
+  const withConsent = await db.patientConsentForm.findMany({
+    where: { organizationId, patientId: { in: patientIds } },
+    select: { patientId: true },
+    distinct: ["patientId"],
+  });
+  const covered = new Set(withConsent.map((c) => c.patientId));
+  const missing = patientIds.filter((id) => !covered.has(id));
+  if (missing.length > 0) {
+    const names = await db.patient.findMany({ where: { id: { in: missing } }, select: { fullName: true } });
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Tedavi onayından önce onam formu gerekli: ${names.map((n) => n.fullName).join(", ")}. Hasta kartından onam formu oluşturun.`,
+    });
+  }
+}
 
 /** Valid FDI (ISO 3950) tooth codes: quadrant 1-4 (permanent) has teeth 1-8, quadrant 5-8 (deciduous) has teeth 1-5. */
 function isValidFdiTooth(n: number): boolean {
@@ -228,16 +253,20 @@ export const treatmentRouter = router({
     .use(requireCapability("dental:treatment:write"))
     .input(z.object({ ids: z.array(z.string()).min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
-      const { count } = await ctx.db.treatment.updateMany({
-        where: {
-          id: { in: input.ids },
-          organizationId: ctx.session.user.organizationId,
-          status: "PROPOSED",
-          patient: {
-            deletedAt: null,
-            ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
-          },
+      const where = {
+        id: { in: input.ids },
+        organizationId: ctx.session.user.organizationId,
+        status: "PROPOSED" as const,
+        patient: {
+          deletedAt: null,
+          ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
         },
+      };
+      const targets = await ctx.db.treatment.findMany({ where, select: { patientId: true }, distinct: ["patientId"] });
+      await assertConsentIfRequired(ctx.db, ctx.session.user.organizationId, targets.map((t) => t.patientId));
+
+      const { count } = await ctx.db.treatment.updateMany({
+        where,
         data: { status: "APPROVED", approvedAt: new Date() },
       });
       return { count };
@@ -266,6 +295,9 @@ export const treatmentRouter = router({
           code: "BAD_REQUEST",
           message: `Tedavi durumu ${treatment.status} iken ${input.status} durumuna geçilemez.`,
         });
+      }
+      if (treatment.status === "PROPOSED" && input.status === "APPROVED") {
+        await assertConsentIfRequired(ctx.db, ctx.session.user.organizationId, [treatment.patientId]);
       }
 
       return ctx.db.treatment.update({

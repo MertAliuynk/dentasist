@@ -2,15 +2,25 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { PlatformTRPCContext } from "@/server/trpc/platform-context";
 import { hasPlatformCapability, alwaysSeesSensitiveData, type PlatformCapability } from "@/server/rbac/platform-permissions";
+import { checkRateLimit } from "@/server/security/rate-limit";
 
 const t = initTRPC.context<PlatformTRPCContext>().create({ transformer: superjson });
 
 export const platformRouter = t.router;
 export const platformPublicProcedure = t.procedure;
 
-export const platformProcedure = t.procedure.use(({ ctx, next }) => {
+export const platformProcedure = t.procedure.use(({ ctx, type, next }) => {
   if (!ctx.session?.platformUser) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  if (type === "mutation") {
+    const { allowed, retryAfterMs } = checkRateLimit(`platform-mutation:${ctx.session.platformUser.id}`, 120, 60 * 1000);
+    if (!allowed) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: `Çok fazla istek gönderildi. Lütfen ${Math.ceil(retryAfterMs / 1000)} saniye sonra tekrar deneyin.`,
+      });
+    }
   }
   return next({ ctx: { ...ctx, platformUser: ctx.session.platformUser } });
 });

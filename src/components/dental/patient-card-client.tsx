@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Printer, Plus, CalendarPlus, StickyNote, Pencil, UserRound, Trash2, ScanLine, ShieldCheck, CheckCheck, FileSignature } from "lucide-react";
+import { Printer, Plus, CalendarPlus, StickyNote, Pencil, UserRound, Trash2, CheckCheck, FileSignature } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc/client";
 import { AppointmentDialog } from "@/components/dental/appointment-dialog";
 import { PatientEditDialog } from "@/components/dental/patient-edit-dialog";
+import { PatientXraySection } from "@/components/dental/patient-xray-section";
 import { PhoneInput } from "@/components/shared/phone-input";
 
 const TREATMENT_COLUMNS = [
@@ -183,25 +184,6 @@ function ConsentFormsSection({ patientId }: { patientId: string }) {
   );
 }
 
-function XrayPlaceholderCard() {
-  return (
-    <Card className="print:hidden">
-      <CardHeader>
-        <CardTitle className="text-sm">Röntgen Görüntüleri</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border py-8 text-center">
-          <ScanLine className="size-5 text-muted-foreground" strokeWidth={1.5} />
-          <p className="text-xs text-muted-foreground">Hastanın röntgen görüntüleri burada listelenecek.</p>
-          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <ShieldCheck className="size-3" />
-            Görüntü yükleme yakında eklenecek — güvenli yükleme, erişim kontrolü ve DICOM/JPEG/PNG desteğiyle.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export function PatientCardClient({ patientId }: { patientId: string }) {
   const [appointmentOpen, setAppointmentOpen] = useState(false);
@@ -452,7 +434,7 @@ export function PatientCardClient({ patientId }: { patientId: string }) {
         <ConsentFormsSection patientId={patientId} />
       </div>
 
-      <XrayPlaceholderCard />
+      <PatientXraySection patientId={patientId} />
 
       <Card>
         <CardHeader>

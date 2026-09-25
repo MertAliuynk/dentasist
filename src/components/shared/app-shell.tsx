@@ -26,7 +26,6 @@ import {
   LogOut,
   ArrowLeftRight,
   ChevronsUpDown,
-  Search,
   Sun,
   Moon,
   Building2,
@@ -50,6 +49,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { NavItem, NavSection, IconKey, PrimaryAction } from "@/lib/nav/types";
+import { HeaderSearch } from "@/components/shared/header-search";
+
+function searchModuleFor(moduleLabel: string): "dental" | "muhasebe" | "laboratuvar" {
+  if (moduleLabel === "Muhasebe") return "muhasebe";
+  if (moduleLabel === "Laboratuvar") return "laboratuvar";
+  return "dental";
+}
 
 const ICONS: Record<IconKey, LucideIcon> = {
   Home,
@@ -296,17 +302,7 @@ export function AppShell({
 
           <div className="min-w-0 flex-1" />
 
-          <div className="relative hidden sm:block">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Hasta Ara..."
-              className="h-8 w-56 rounded-md border border-input bg-muted/50 pl-8 pr-10 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-            />
-            <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              ⌘K
-            </kbd>
-          </div>
+          <HeaderSearch module={searchModuleFor(moduleLabel)} />
 
           <Button
             variant="ghost"

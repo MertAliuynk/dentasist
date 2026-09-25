@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { Prisma } from "@prisma/client";
 import { router, protectedProcedure, requireEntitlement, requireCapability } from "@/server/trpc/trpc";
 import { branchScopeWhere, assertAccessibleBranch } from "@/server/rbac/scope";
 import { logAudit } from "@/server/services/audit";
@@ -130,6 +131,21 @@ export const patientRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAccessibleBranch(ctx.accessibleBranchIds, input.branchId);
+      // Ayarlar → "Hasta eklerken anamnez zorunlu olsun".
+      const hasAnamnesis =
+        (input.anamnesisAnswers && Object.keys(input.anamnesisAnswers).length > 0) || !!input.anamnesis?.trim();
+      if (!hasAnamnesis) {
+        const org = await ctx.db.organization.findUnique({
+          where: { id: ctx.session.user.organizationId },
+          select: { anamnezRequired: true },
+        });
+        if (org?.anamnezRequired) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Klinik ayarlarına göre hasta eklerken anamnez formu doldurulmalı.",
+          });
+        }
+      }
       const patient = await ctx.db.patient.create({
         data: {
           organizationId: ctx.session.user.organizationId,
@@ -237,13 +253,17 @@ export const patientRouter = router({
         id: z.string(),
         fullName: z.string().trim().min(2).max(160),
         phone: z.string().trim().min(7).max(20),
+        branchId: z.string().optional(),
         primaryDoctorId: z.string().optional().nullable(),
         tcKimlikNo: tcKimlikSchema,
         birthDate: z.string().optional().nullable(),
         anamnesis: z.string().trim().max(4000).optional().nullable(),
+        anamnesisAnswers: z.record(z.string(), z.any()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.branchId) assertAccessibleBranch(ctx.accessibleBranchIds, input.branchId);
+
       const { count } = await ctx.db.patient.updateMany({
         where: {
           id: input.id,
@@ -253,10 +273,17 @@ export const patientRouter = router({
         data: {
           fullName: input.fullName,
           phone: input.phone,
+          ...(input.branchId ? { branchId: input.branchId } : {}),
           primaryDoctorId: input.primaryDoctorId || null,
           tcKimlikNo: input.tcKimlikNo || null,
           birthDate: input.birthDate ? new Date(input.birthDate) : null,
           anamnesis: input.anamnesis || null,
+          ...(input.anamnesisAnswers !== undefined
+            ? {
+                anamnesisAnswers:
+                  Object.keys(input.anamnesisAnswers).length > 0 ? input.anamnesisAnswers : Prisma.JsonNull,
+              }
+            : {}),
         },
       });
       if (count === 0) throw new TRPCError({ code: "NOT_FOUND" });

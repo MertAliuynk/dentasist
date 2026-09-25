@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { auth as tenantAuth } from "@/server/auth-edge";
 import { auth as platformAuth } from "@/server/platform-auth-edge";
+import { isSubscriptionUsable } from "@/lib/subscription-access";
 import type { ModuleKey } from "@prisma/client";
 
 const MODULE_BY_PREFIX: Record<string, ModuleKey> = {
@@ -28,7 +29,9 @@ const tenantMiddleware = tenantAuth((req) => {
   const hasEntitlement = user.entitlements?.some(
     (e) => e.module === requiredModule && e.active,
   );
-  if (!hasEntitlement) {
+  const sub = user.subscription;
+  const subscriptionUsable = !sub || isSubscriptionUsable(sub.status, sub.endsAt);
+  if (!hasEntitlement || !subscriptionUsable) {
     return NextResponse.redirect(new URL("/abonelik", req.nextUrl.origin));
   }
 

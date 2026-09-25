@@ -1,8 +1,59 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, requireEntitlement, requireCapability } from "@/server/trpc/trpc";
+import type { db as Db } from "@/server/db";
+import type { GlobalRole } from "@prisma/client";
+
+function isBroadRole(roles: GlobalRole[]) {
+  return roles.includes("PATRON") || roles.includes("SUBE_YONETICISI");
+}
+
+async function resolveLabPatientWhere(
+  db: typeof Db,
+  organizationId: string,
+  userId: string,
+  roles: GlobalRole[],
+  accessibleBranchIds: string[] | "ALL",
+) {
+  if (isBroadRole(roles)) {
+    if (accessibleBranchIds === "ALL") return { organizationId };
+    return { organizationId, klinik: { branchId: { in: accessibleBranchIds } } };
+  }
+  if (roles.includes("TEKNISYEN")) {
+    const branchIds = accessibleBranchIds === "ALL" ? [] : accessibleBranchIds;
+    return { organizationId, klinik: { branchId: { in: branchIds } } };
+  }
+  const doctor = await db.doctor.findUnique({ where: { userId }, select: { id: true } });
+  return { organizationId, doctorId: doctor?.id ?? "__none__" };
+}
 
 export const labPatientRouter = router({
+  // Backs the header "Hasta Ara" search for the Laboratuvar module.
+  list: protectedProcedure
+    .use(requireEntitlement("LABORATUVAR"))
+    .use(requireCapability("lab:patient:read"))
+    .input(z.object({ search: z.string().trim().max(120).optional(), limit: z.number().int().min(1).max(50).default(8) }))
+    .query(async ({ ctx, input }) => {
+      const roles = ctx.session.user.memberships.map((m) => m.role);
+      const where = await resolveLabPatientWhere(
+        ctx.db,
+        ctx.session.user.organizationId,
+        ctx.session.user.id,
+        roles,
+        ctx.accessibleBranchIds,
+      );
+      return ctx.db.labPatient.findMany({
+        where: {
+          ...where,
+          deletedAt: null,
+          ...(input.search ? { fullName: { contains: input.search, mode: "insensitive" as const } } : {}),
+        },
+        include: { klinik: true },
+        orderBy: { fullName: "asc" },
+        take: input.limit,
+      });
+    }),
+
   create: protectedProcedure
     .use(requireEntitlement("LABORATUVAR"))
     .use(requireCapability("lab:patient:write"))

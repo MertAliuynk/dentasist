@@ -12,7 +12,6 @@ export const muhasebeNav: NavItem[] = [
   { href: "/muhasebe/hastalar", label: "Hastalar", icon: "Users", section: "Sayfalar" },
   { href: "/muhasebe/hekimler", label: "Hekimler", icon: "Stethoscope", section: "Sayfalar" },
   { href: "/muhasebe/odeme-listeleri", label: "Ödeme Listeleri", icon: "Receipt", section: "Sayfalar" },
-  { href: "/muhasebe/e-fatura", label: "e-Fatura", icon: "FileText", section: "Sayfalar" },
   { href: "/muhasebe/destek", label: "Destek", icon: "LifeBuoy", section: "Sayfalar" },
   {
     href: "/muhasebe/incele",

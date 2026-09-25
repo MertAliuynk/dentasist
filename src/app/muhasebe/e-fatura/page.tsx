@@ -1,12 +1,7 @@
-import { FileText } from "lucide-react";
-import { PageStub } from "@/components/shared/page-stub";
+import { notFound } from "next/navigation";
 
+// Hidden until built: e-Fatura — muhasebe kayıtlarından otomatik e-Fatura/e-Arşiv (GİB entegratörü gerekiyor).
+// Removed from the nav too (src/lib/nav) — restore both together.
 export default function EFaturaPage() {
-  return (
-    <PageStub
-      icon={FileText}
-      title="e-Fatura"
-      description="Muhasebe kayıtlarından otomatik e-Fatura/e-Arşiv oluşturma desteği."
-    />
-  );
+  notFound();
 }

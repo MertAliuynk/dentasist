@@ -78,6 +78,10 @@ model Organization {
   stockMovements         StockMovement[]
   patientConsentForms    PatientConsentForm[]
   messageTemplates       MessageTemplate[]
+  patientXrays           PatientXray[]
+  activityLogs           ActivityLog[]
+  smsSettings            SmsSettings?
+  messageLogs            MessageLog[]
 }
 
 model Branch {
@@ -164,6 +168,9 @@ model Subscription {
   paymentStub      Json?
   discountCodeId   String?
   discountCode     DiscountCode?      @relation(fields: [discountCodeId], references: [id])
+  // Internal note visible only in the platform admin panel (e.g. "havale ile
+  // ödendi, 3 ay uzatıldı") — never shown to the clinic.
+  adminNote        String?            @db.Text
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
@@ -228,21 +235,23 @@ model User {
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
 
-  memberships            Membership[]
-  doctorProfile          Doctor?
-  accounts               Account[]
-  sessions               Session[]
-  patientNotes           PatientNote[]
-  auditLogs              AuditLog[]
-  capabilityOverrides    UserCapabilityOverride[]
-  labStagesAdded         LabTreatmentStage[]
-  labNotifications       LabNotification[]
-  labFeedback            LabFeedback[]
-  favoriteTreatmentTypes UserFavoriteTreatmentType[]
-  supportTickets         SupportTicket[]
-  supportTicketMessages  SupportTicketMessage[]
-  consentFormsCreated    PatientConsentForm[]
+  memberships             Membership[]
+  doctorProfile           Doctor?
+  accounts                Account[]
+  sessions                Session[]
+  patientNotes            PatientNote[]
+  auditLogs               AuditLog[]
+  capabilityOverrides     UserCapabilityOverride[]
+  labStagesAdded          LabTreatmentStage[]
+  labNotifications        LabNotification[]
+  labFeedback             LabFeedback[]
+  favoriteTreatmentTypes  UserFavoriteTreatmentType[]
+  supportTickets          SupportTicket[]
+  supportTicketMessages   SupportTicketMessage[]
+  consentFormsCreated     PatientConsentForm[]
   messageTemplatesCreated MessageTemplate[]
+  xraysUploaded           PatientXray[]
+  messagesSent            MessageLog[]
 }
 
 model Account {
@@ -385,6 +394,8 @@ model Patient {
   companions          PatientCompanion[]
   stockMovements      StockMovement[]
   consentForms        PatientConsentForm[]
+  xrays               PatientXray[]
+  messageLogs         MessageLog[]
 
   @@index([organizationId, branchId])
   @@index([organizationId, tcKimlikNo])
@@ -420,20 +431,109 @@ enum MessageChannel {
 // Sending itself isn't wired to a provider yet — this just backs the
 // template-management UI (create/edit/delete per channel).
 model MessageTemplate {
-  id              String          @id @default(cuid())
+  id              String         @id @default(cuid())
   organizationId  String
-  organization    Organization    @relation(fields: [organizationId], references: [id])
+  organization    Organization   @relation(fields: [organizationId], references: [id])
   channel         MessageChannel
   name            String
   // Free text with {ad}, {randevu_tarihi}, {randevu_saati}, {hekim}, {klinik}
   // placeholders — substituted client-side for preview purposes.
-  body            String          @db.Text
+  body            String         @db.Text
   createdByUserId String?
-  createdBy       User?           @relation(fields: [createdByUserId], references: [id])
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdBy       User?          @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  usedForSmsReminders SmsSettings[]
 
   @@index([organizationId, channel])
+}
+
+enum SmsProvider {
+  NETGSM
+}
+
+// A clinic's own SMS provider account (they buy credit from the provider
+// directly; we just send through it). The password is AES-GCM encrypted at
+// rest (src/server/security/secret-box.ts) and never sent back to the
+// browser. Reminder on/off lives on Organization.smsRemindersEnabled.
+model SmsSettings {
+  id                  String           @id @default(cuid())
+  organizationId      String           @unique
+  organization        Organization     @relation(fields: [organizationId], references: [id])
+  provider            SmsProvider      @default(NETGSM)
+  username            String
+  passwordEnc         String
+  msgheader           String
+  // How long before an appointment the automatic reminder goes out.
+  reminderHoursBefore Int              @default(24)
+  // Template used for reminders; null → built-in default text.
+  reminderTemplateId  String?
+  reminderTemplate    MessageTemplate? @relation(fields: [reminderTemplateId], references: [id], onDelete: SetNull)
+  lastVerifiedAt      DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+}
+
+enum MessageKind {
+  MANUAL
+  REMINDER
+  TEST
+}
+
+enum MessageStatus {
+  SENT
+  FAILED
+  // WhatsApp: we only open wa.me with the text filled in; the user
+  // presses send on their own phone, so we can't know it was delivered.
+  OPENED
+}
+
+// Every SMS/WhatsApp message the system sent (or tried to) — shown on the
+// SMS/WhatsApp pages as "Gönderim Geçmişi".
+model MessageLog {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  channel        MessageChannel
+  kind           MessageKind
+  status         MessageStatus
+  patientId      String?
+  patient        Patient?       @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  appointmentId  String?
+  appointment    Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  phone          String
+  body           String         @db.Text
+  providerRef    String?
+  errorMessage   String?
+  sentByUserId   String?
+  sentBy         User?          @relation(fields: [sentByUserId], references: [id])
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([appointmentId])
+}
+
+// A röntgen/görüntü file uploaded for a patient — the file bytes live in
+// S3-compatible object storage (MinIO in this deployment), this row is
+// just the metadata + `objectKey` pointer. Access is always via short-lived
+// presigned URLs (see src/server/storage/s3.ts) — the bucket itself is
+// private, never a public base URL, since these are medical images.
+model PatientXray {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  patientId        String
+  patient          Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  objectKey        String
+  fileName         String
+  contentType      String
+  sizeBytes        Int
+  uploadedByUserId String?
+  uploadedBy       User?        @relation(fields: [uploadedByUserId], references: [id])
+  createdAt        DateTime     @default(now())
+
+  @@index([organizationId, patientId])
 }
 
 // Refakatçi — an optional companion/escort recorded alongside a patient.
@@ -480,8 +580,13 @@ model Appointment {
   // separate context-free "Tedavi Bitti" button) — shown in Randevu Geçmişi.
   completedTreatmentId String?           @unique
   completedTreatment   Treatment?        @relation(fields: [completedTreatmentId], references: [id])
+  // Set (atomically, as a claim) when the automatic SMS reminder is sent;
+  // cleared on reschedule so the new time gets its own reminder.
+  reminderSentAt       DateTime?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
+
+  messageLogs MessageLog[]
 
   @@index([organizationId, doctorId, startsAt])
   @@index([organizationId, branchId, startsAt])
@@ -1075,6 +1180,34 @@ model AuditLog {
   createdAt      DateTime     @default(now())
 
   @@index([organizationId, entityType, entityId])
+}
+
+// Automatic, exhaustive trail of what a clinic's users did — every tRPC
+// mutation (success or failure), every failed query, and sign-ins. Written
+// by middleware (see src/server/services/activity-log.ts), not by hand, so
+// it's complete where AuditLog is curated. Viewed only from the platform
+// admin panel to debug "X yaparken hata aldım" reports; inputs are stored
+// with secrets redacted and size-capped.
+model ActivityLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  userName       String?
+  // tRPC procedure path (e.g. "patient.create") or "auth.login".
+  path           String
+  kind           String
+  input          Json?
+  ok             Boolean
+  errorCode      String?
+  errorMessage   String?      @db.Text
+  durationMs     Int?
+  ip             String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, ok, createdAt])
+  @@index([ok, createdAt])
 }
 
 enum SupportTicketStatus {

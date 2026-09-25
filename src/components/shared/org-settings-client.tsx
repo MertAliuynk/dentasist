@@ -298,14 +298,14 @@ function TogglesSection({ org, readOnly }: { org: Org; readOnly: boolean }) {
       <CardHeader>
         <CardTitle className="text-base">Hatırlatma, Anamnez ve Onam Ayarları</CardTitle>
         <CardDescription>
-          Bazı seçenekler ilgili modül (SMS Hizmetleri, Onam Formu) aktif olduğunda devreye girer.
+          SMS hatırlatması için SMS Hizmetleri sayfasından SMS sağlayıcı hesabınızın bağlı olması gerekir.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <label className="flex items-center justify-between gap-2 text-sm">
           <span>
             SMS ile randevu hatırlatması gönder
-            <span className="ml-2 text-xs text-muted-foreground">(SMS Hizmetleri yakında)</span>
+            <span className="ml-2 text-xs text-muted-foreground">(SMS hesabı bağlı olmalı)</span>
           </span>
           <Switch
             checked={org.smsRemindersEnabled}
@@ -324,7 +324,6 @@ function TogglesSection({ org, readOnly }: { org: Org; readOnly: boolean }) {
         <label className="flex items-center justify-between gap-2 text-sm">
           <span>
             Tedavi onayından önce onam formu zorunlu olsun
-            <span className="ml-2 text-xs text-muted-foreground">(Onam Formu yakında)</span>
           </span>
           <Switch
             checked={org.onamRequired}

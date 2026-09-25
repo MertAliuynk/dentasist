@@ -1,12 +1,7 @@
-import { FileHeart } from "lucide-react";
-import { PageStub } from "@/components/shared/page-stub";
+import { notFound } from "next/navigation";
 
+// Hidden until built: e-Reçete — Anamnez formlarıyla entegre e-Reçete oluşturma/gönderme (Medula entegrasyonu gerekiyor).
+// Removed from the nav too (src/lib/nav) — restore both together.
 export default function ERecetePage() {
-  return (
-    <PageStub
-      icon={FileHeart}
-      title="e-Reçete"
-      description="Anamnez formlarıyla entegre, e-Reçete oluşturma ve gönderme desteği."
-    />
-  );
+  notFound();
 }

@@ -57,6 +57,9 @@ export const appointmentRouter = router({
           startsAt: { lt: new Date(input.end) },
           endsAt: { gt: new Date(input.start) },
           ...(scopedDoctorId ? { doctorId: scopedDoctorId } : {}),
+          // A deleted patient's future appointments shouldn't keep haunting
+          // the calendar.
+          patient: { deletedAt: null },
         },
         include: {
           patient: true,
@@ -89,6 +92,7 @@ export const appointmentRouter = router({
         startsAt: { gte: startOfDay, lte: endOfDay },
         status: "SCHEDULED",
         ...(scopedDoctorId ? { doctorId: scopedDoctorId } : {}),
+        patient: { deletedAt: null },
       },
       include: { patient: true, doctor: { include: { user: true } } },
       orderBy: { startsAt: "asc" },
@@ -116,6 +120,7 @@ export const appointmentRouter = router({
         ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
         startsAt: { gte: startOfDay, lte: endOfDay },
         ...(scopedDoctorId ? { doctorId: scopedDoctorId } : {}),
+        patient: { deletedAt: null },
       },
       include: { patient: true, doctor: { include: { user: true } } },
       orderBy: { startsAt: "asc" },
@@ -191,7 +196,7 @@ export const appointmentRouter = router({
       const organizationId = ctx.session.user.organizationId;
       const existing = await ctx.db.appointment.findFirst({
         where: { id: input.id, ...branchScopeWhere(organizationId, ctx.accessibleBranchIds) },
-        select: { doctorId: true, roomId: true, branchId: true },
+        select: { doctorId: true, roomId: true, branchId: true, startsAt: true },
       });
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -225,6 +230,8 @@ export const appointmentRouter = router({
           startsAt: new Date(input.startsAt),
           endsAt: new Date(input.endsAt),
           doctorId: nextDoctorId,
+          // New time → the automatic SMS reminder should go out again for it.
+          ...(existing.startsAt.getTime() !== new Date(input.startsAt).getTime() ? { reminderSentAt: null } : {}),
         },
       });
       if (count === 0) throw new TRPCError({ code: "NOT_FOUND" });

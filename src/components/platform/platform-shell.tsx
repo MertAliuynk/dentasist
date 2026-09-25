@@ -11,7 +11,6 @@ import {
   LogOut,
   ShieldCheck,
   LifeBuoy,
-  Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +34,7 @@ export function PlatformShell({
 
   const navItems = [
     { href: "/admin", label: "Panel", icon: LayoutDashboard, exact: true },
-    { href: "/admin/organizasyonlar", label: "Organizasyonlar", icon: Building2 },
+    { href: "/admin/organizasyonlar", label: "Klinikler", icon: Building2 },
     { href: "/admin/destek-talepleri", label: "Destek Talepleri", icon: LifeBuoy },
     ...(platformUser.role === "OWNER"
       ? [{ href: "/admin/kullanicilar", label: "Ekip Üyeleri", icon: Users }]
@@ -44,9 +43,8 @@ export function PlatformShell({
       ? [{ href: "/admin/denetim-kaydi", label: "Denetim Kaydı", icon: ScrollText }]
       : []),
     ...(platformUser.role === "OWNER" ? [{ href: "/admin/planlar", label: "Planlar", icon: Tag }] : []),
-    ...(platformUser.role === "OWNER"
-      ? [{ href: "/admin/indirim-kodlari", label: "İndirim Kodları", icon: Percent }]
-      : []),
+    // İndirim Kodları (/admin/indirim-kodlari) is hidden until payments are
+    // wired up — the page and router still exist.
   ];
 
   return (
