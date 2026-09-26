@@ -34,7 +34,7 @@ export default async function PricingPage() {
   });
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+    <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
       <div className="mb-12 text-center">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Fiyatlandırma</h1>
         <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">

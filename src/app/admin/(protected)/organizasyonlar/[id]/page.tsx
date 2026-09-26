@@ -8,13 +8,17 @@ export default async function PlatformOrganizationDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ sekme?: string; hatalar?: string }>;
+  searchParams: Promise<{ sekme?: string; hatalar?: string; ara?: string }>;
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const session = await auth();
   if (!session?.platformUser) redirect("/admin/giris");
 
-  const initialTab: DetailTab = DETAIL_TABS.includes(query.sekme as DetailTab) ? (query.sekme as DetailTab) : "genel";
+  const initialTab: DetailTab = DETAIL_TABS.includes(query.sekme as DetailTab)
+    ? (query.sekme as DetailTab)
+    : query.ara
+      ? "kayitlar"
+      : "genel";
 
   return (
     <OrganizationDetailClient
@@ -22,6 +26,7 @@ export default async function PlatformOrganizationDetailPage({
       role={session.platformUser.role}
       initialTab={initialTab}
       initialOnlyErrors={query.hatalar === "1"}
+      initialSearch={query.ara ?? ""}
     />
   );
 }

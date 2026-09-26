@@ -25,7 +25,7 @@ export default function FaqPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
+    <div className="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="mb-12 text-center">

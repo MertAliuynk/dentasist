@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { ArrowLeft, Copy, KeyRound, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,11 +54,13 @@ export function OrganizationDetailClient({
   role,
   initialTab,
   initialOnlyErrors,
+  initialSearch = "",
 }: {
   organizationId: string;
   role: string;
   initialTab: DetailTab;
   initialOnlyErrors: boolean;
+  initialSearch?: string;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<DetailTab>(initialTab);
@@ -79,7 +82,7 @@ export function OrganizationDetailClient({
   const owner = data.owners[0];
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <Link href="/admin/organizasyonlar" className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Klinikler
       </Link>
@@ -155,6 +158,7 @@ export function OrganizationDetailClient({
           <ActivityTab
             organizationId={organizationId}
             initialOnlyErrors={initialOnlyErrors}
+            initialSearch={initialSearch}
             userId={logUserId}
             onUserChange={setLogUserId}
           />
@@ -290,7 +294,7 @@ function SubscriptionTab({ organizationId, sub, canManage }: { organizationId: s
       toast.success("Üyelik kaydedildi.");
       refresh();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
   const adjust = platformTrpc.organization.adjustPeriod.useMutation({
     onSuccess: (res, vars) => {
@@ -301,7 +305,7 @@ function SubscriptionTab({ organizationId, sub, canManage }: { organizationId: s
       setReason("");
       refresh();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
   const setSubStatus = platformTrpc.organization.setStatus.useMutation({
     onSuccess: (_r, vars) => {
@@ -310,14 +314,14 @@ function SubscriptionTab({ organizationId, sub, canManage }: { organizationId: s
       setConfirmClose(false);
       refresh();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
   const saveNote = platformTrpc.organization.updateNote.useMutation({
     onSuccess: () => {
       toast.success("Not kaydedildi.");
       refresh();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const selectedPlan = plans?.find((p) => p.id === planId);
@@ -574,14 +578,14 @@ function UsersTab({
       toast.success("Hesap durumu güncellendi.");
       utils.organization.staffList.invalidate({ organizationId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
   const resetPassword = platformTrpc.organization.staffResetPassword.useMutation({
     onSuccess: (res) => {
       setConfirmResetId(null);
       setResetResult(res);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -740,18 +744,20 @@ function toLocalInput(d: Date) {
 function ActivityTab({
   organizationId,
   initialOnlyErrors,
+  initialSearch,
   userId,
   onUserChange,
 }: {
   organizationId: string;
   initialOnlyErrors: boolean;
+  initialSearch: string;
   userId: string;
   onUserChange: (id: string) => void;
 }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [onlyErrors, setOnlyErrors] = useState(initialOnlyErrors);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const { data: users } = platformTrpc.organization.staffList.useQuery({ organizationId });
@@ -823,7 +829,7 @@ function ActivityTab({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Ara</Label>
-            <Input placeholder="İşlem, hata mesajı…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input placeholder="Referans (HT-…), işlem, hata mesajı…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">

@@ -11,6 +11,7 @@ export const messageTemplateRouter = router({
     .query(({ ctx, input }) => {
       return ctx.db.messageTemplate.findMany({
         where: { organizationId: ctx.session.user.organizationId, channel: input.channel },
+        include: { automations: { select: { id: true, name: true, enabled: true } } },
         orderBy: { createdAt: "desc" },
       });
     }),
@@ -61,6 +62,18 @@ export const messageTemplateRouter = router({
     .use(requireCapability("dental:messaging:manage"))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      // Deleting would silently switch those automations to the default
+      // text — make the user repoint them first instead.
+      const usedBy = await ctx.db.smsAutomation.findMany({
+        where: { templateId: input.id, organizationId: ctx.session.user.organizationId },
+        select: { name: true },
+      });
+      if (usedBy.length > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Bu şablon şu otomatik mesajlarda kullanılıyor: ${usedBy.map((u) => u.name).join(", ")}. Önce onları başka şablona geçirin.`,
+        });
+      }
       const { count } = await ctx.db.messageTemplate.deleteMany({
         where: { id: input.id, organizationId: ctx.session.user.organizationId },
       });

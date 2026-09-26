@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,11 +55,11 @@ export default function NewPatientPage() {
       toast.success("Hasta eklendi.");
       router.push(`/dental/hastalar/${patient.id}`);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-2xl flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Yeni Hasta Ekle</CardTitle>

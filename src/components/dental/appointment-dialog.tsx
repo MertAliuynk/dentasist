@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import {
   Dialog,
   DialogContent,
@@ -101,7 +102,7 @@ function AppointmentForm({
       onSaved?.();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const updateStatus = trpc.appointment.updateStatus.useMutation({
@@ -112,7 +113,7 @@ function AppointmentForm({
       onSaved?.();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const selectedDoctor = doctors?.find((d) => d.id === doctorId);

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,7 @@ export default function PlatformStaffPage() {
       setEmail("");
       setPassword("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const deactivate = platformTrpc.staff.deactivate.useMutation({
@@ -55,11 +56,11 @@ export default function PlatformStaffPage() {
       toast.success("Hesap devre dışı bırakıldı.");
       utils.staff.list.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto w-full max-w-3xl">
       <Card>
         <CardHeader className="flex flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
           <div>
@@ -76,12 +77,12 @@ export default function PlatformStaffPage() {
           ) : (
             <div className="flex flex-col divide-y divide-border">
               {staff?.map((s) => (
-                <div key={s.id} className="flex items-center justify-between py-2.5 text-sm">
-                  <div>
+                <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                  <div className="min-w-0">
                     <p className="font-medium">{s.name}</p>
                     <p className="text-muted-foreground">{s.email}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{ROLE_OPTIONS.find((r) => r.value === s.role)?.label ?? s.role}</Badge>
                     {s.role !== "OWNER" && (
                       <Button variant="ghost" size="sm" onClick={() => deactivate.mutate({ id: s.id })}>

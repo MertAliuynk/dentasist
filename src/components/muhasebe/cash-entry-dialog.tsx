@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import {
   Dialog,
   DialogContent,
@@ -88,7 +89,7 @@ export function CashEntryDialog({
       setPatientLabel("");
       setPatientSearch("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const kinds = type === "GELIR" ? INCOME_KINDS : EXPENSE_KINDS;

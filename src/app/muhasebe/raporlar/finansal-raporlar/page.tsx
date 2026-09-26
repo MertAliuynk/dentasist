@@ -30,7 +30,7 @@ export default function FinancialReportsPage() {
   const totalExpense = data?.dailyBreakdown.reduce((s, d) => s + d.expense, 0) ?? 0;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-4xl flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Finansal Raporlar</CardTitle>

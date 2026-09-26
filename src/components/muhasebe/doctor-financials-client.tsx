@@ -34,7 +34,7 @@ export function DoctorFinancialsClient({ doctorId }: { doctorId: string }) {
   if (!data) return <p className="py-24 text-center text-sm text-muted-foreground">Hekim bulunamadı.</p>;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <Card>
         <CardHeader className="flex flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
           <div>

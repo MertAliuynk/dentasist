@@ -13,7 +13,7 @@ export default function PatientCardLookupPage() {
   const { data, isFetching } = trpc.patient.list.useQuery({ search, limit: 20 });
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto w-full max-w-4xl">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
           <div>

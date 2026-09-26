@@ -4,7 +4,7 @@ import { ExpenseCategorySection } from "@/components/muhasebe/expense-category-s
 
 export default function MuhasebeYonetimPage() {
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <StaffAdminClient moduleLabel="Muhasebe" />
       <div className="grid gap-4 sm:grid-cols-2">
         <BranchSection />

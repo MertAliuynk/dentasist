@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +41,7 @@ export default function BulkPatientImportPage() {
       toast.success(`${result.count} hasta eklendi.`);
       router.push("/dental/hasta-listesi");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   function updateRow(id: string, field: keyof Row, value: string) {
@@ -53,7 +54,7 @@ export default function BulkPatientImportPage() {
   const effectiveBranchId = branches && branches.length === 1 ? branches[0].id : branchId;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto w-full max-w-3xl">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Toplu Hasta Ekleme</CardTitle>

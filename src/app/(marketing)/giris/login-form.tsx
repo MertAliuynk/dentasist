@@ -21,7 +21,7 @@ function LoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16 sm:px-6">
+    <div className="mx-auto w-full flex max-w-md flex-col items-center px-4 py-16 sm:px-6">
       <Mascot className="mb-2 h-20 w-20" />
       <Card className="w-full">
         <CardHeader>

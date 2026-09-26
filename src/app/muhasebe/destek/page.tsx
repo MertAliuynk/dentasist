@@ -1,5 +1,5 @@
-import { SupportTicketClient } from "@/components/shared/support-ticket-client";
+import { SupportPage } from "@/components/shared/support-page";
 
-export default function MuhasebeDestekPage() {
-  return <SupportTicketClient />;
+export default function DestekPage(props: { searchParams: Promise<Record<string, string | undefined>> }) {
+  return <SupportPage {...props} />;
 }

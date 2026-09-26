@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,12 +44,12 @@ function SignUpForm() {
       else router.push("/laboratuvar");
     },
     onError: (error) => {
-      toast.error(error.message || "Kayıt sırasında bir hata oluştu.");
+      toastError(error, "Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.");
     },
   });
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16 sm:px-6">
+    <div className="mx-auto w-full flex max-w-md flex-col items-center px-4 py-16 sm:px-6">
       <Mascot className="mb-2 h-20 w-20" />
       <Card className="w-full">
         <CardHeader>

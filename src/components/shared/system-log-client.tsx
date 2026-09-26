@@ -30,7 +30,7 @@ export function SystemLogClient() {
   const logs = data?.pages.flatMap((p) => p.logs) ?? [];
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto w-full max-w-4xl">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

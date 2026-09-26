@@ -23,6 +23,7 @@ export const labNav: NavItem[] = [
     capability: "lab:patient:write",
   },
   { href: "/laboratuvar/bildirimler", label: "Bildirimler", icon: "Bell", section: "Sayfalar" },
+  { href: "/laboratuvar/destek", label: "Destek", icon: "LifeBuoy", section: "Sayfalar" },
   {
     href: "/laboratuvar/feedback",
     label: "Feedback",

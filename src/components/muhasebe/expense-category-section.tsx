@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,14 +20,14 @@ export function ExpenseCategorySection() {
       utils.expenseCategory.list.invalidate();
       setName("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
   const remove = trpc.expenseCategory.delete.useMutation({
     onSuccess: () => {
       toast.success("Gider kalemi silindi.");
       utils.expenseCategory.list.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (

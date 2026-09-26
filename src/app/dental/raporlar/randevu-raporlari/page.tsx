@@ -44,7 +44,7 @@ export default function AppointmentReportsPage() {
   const noShowRate = total > 0 ? Math.round(((data?.statusCounts.NO_SHOW ?? 0) / total) * 100) : 0;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-4xl flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Randevu Raporları</CardTitle>

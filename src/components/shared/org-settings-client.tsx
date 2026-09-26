@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import type { inferRouterOutputs } from "@trpc/server";
 import { Download, Gift, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -50,7 +51,7 @@ function GeneralSection({ org, readOnly }: { org: Org; readOnly: boolean }) {
       toast.success("Güncellendi.");
       utils.organization.get.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -81,7 +82,7 @@ function BusinessInfoSection({ org, readOnly }: { org: Org; readOnly: boolean })
       toast.success("İşletme bilgileri güncellendi.");
       utils.organization.get.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const changed =
@@ -136,7 +137,7 @@ function BillingInfoSection({ org, readOnly }: { org: Org; readOnly: boolean }) 
       toast.success("Fatura bilgileri güncellendi.");
       utils.organization.get.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const changed = billingEmail !== (org.billingEmail ?? "") || billingAddress !== (org.billingAddress ?? "");
@@ -177,7 +178,7 @@ function WorkingHoursSection({ org, readOnly }: { org: Org; readOnly: boolean })
       toast.success("Çalışma saatleri güncellendi.");
       utils.organization.get.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   function setDay(key: string, patch: Partial<DayHours>) {
@@ -247,7 +248,7 @@ function AppointmentSettingsSection({ org, readOnly }: { org: Org; readOnly: boo
       toast.success("Randevu ayarları güncellendi.");
       utils.organization.get.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const changed = Number(duration) !== org.appointmentDurationMinutes || Number(buffer) !== org.appointmentBufferMinutes;
@@ -290,7 +291,7 @@ function TogglesSection({ org, readOnly }: { org: Org; readOnly: boolean }) {
       toast.success("Güncellendi.");
       utils.organization.get.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -298,21 +299,14 @@ function TogglesSection({ org, readOnly }: { org: Org; readOnly: boolean }) {
       <CardHeader>
         <CardTitle className="text-base">Hatırlatma, Anamnez ve Onam Ayarları</CardTitle>
         <CardDescription>
-          SMS hatırlatması için SMS Hizmetleri sayfasından SMS sağlayıcı hesabınızın bağlı olması gerekir.
+          Randevu hatırlatma, doğum günü ve kontrol SMS&apos;leri{" "}
+          <Link href="/dental/sms-hizmetleri" className="underline underline-offset-2 hover:text-foreground">
+            SMS Hizmetleri → Otomatik Mesajlar
+          </Link>{" "}
+          bölümünden yönetilir.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <label className="flex items-center justify-between gap-2 text-sm">
-          <span>
-            SMS ile randevu hatırlatması gönder
-            <span className="ml-2 text-xs text-muted-foreground">(SMS hesabı bağlı olmalı)</span>
-          </span>
-          <Switch
-            checked={org.smsRemindersEnabled}
-            onCheckedChange={(checked) => update.mutate({ smsRemindersEnabled: checked })}
-            disabled={readOnly}
-          />
-        </label>
         <label className="flex items-center justify-between gap-2 text-sm">
           <span>Hasta eklerken anamnez zorunlu olsun</span>
           <Switch
@@ -517,7 +511,7 @@ export function OrgSettingsClient({
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-3xl flex-col gap-4">
       {!isPatron && (
         <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           Bu ayarları yalnızca Patron rolü değiştirebilir — aşağıdaki bilgiler salt okunur görüntüleniyor.

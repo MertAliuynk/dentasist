@@ -36,11 +36,12 @@ function sanitizeInput(input: unknown) {
 }
 
 export type ActivityEntry = {
-  organizationId: string;
+  organizationId: string | null;
+  ref?: string | null;
   userId?: string | null;
   userName?: string | null;
   path: string;
-  kind: "mutation" | "query" | "auth";
+  kind: "mutation" | "query" | "auth" | "render" | "client";
   input?: unknown;
   ok: boolean;
   errorCode?: string | null;
@@ -58,6 +59,7 @@ export function recordActivity(entry: ActivityEntry) {
     .create({
       data: {
         organizationId: entry.organizationId,
+        ref: entry.ref ?? null,
         userId: entry.userId ?? null,
         userName: entry.userName ?? null,
         path: entry.path,

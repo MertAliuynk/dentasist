@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,12 +77,12 @@ export function AddTreatmentClient({ patientId }: { patientId: string }) {
       utils.patient.getById.invalidate({ id: patientId });
       router.push(`/dental/hastalar/${patientId}`);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const toggleFavorite = trpc.favoriteTreatmentType.toggle.useMutation({
     onSuccess: () => utils.favoriteTreatmentType.list.invalidate(),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   function selectType(id: string) {
@@ -166,7 +167,7 @@ export function AddTreatmentClient({ patientId }: { patientId: string }) {
   if (!patient) return <p className="py-24 text-center text-sm text-muted-foreground">Yükleniyor…</p>;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <Card>
         <CardHeader className="flex flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
           <div>

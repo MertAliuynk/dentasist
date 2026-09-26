@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -59,7 +60,7 @@ export function CloseSlotDialog({ open, onOpenChange }: { open: boolean; onOpenC
       utils.appointmentBlock.listRange.invalidate();
       setReason("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const remove = trpc.appointmentBlock.delete.useMutation({
@@ -67,7 +68,7 @@ export function CloseSlotDialog({ open, onOpenChange }: { open: boolean; onOpenC
       toast.success("Kapatma kaldırıldı.");
       utils.appointmentBlock.listRange.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (

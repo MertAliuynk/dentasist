@@ -37,7 +37,7 @@ export default async function SubscriptionUpsellPage() {
   const { title, body } = reasonFor(session?.user?.subscription);
 
   return (
-    <div className="mx-auto flex max-w-md flex-col px-4 py-24 sm:px-6">
+    <div className="mx-auto w-full flex max-w-md flex-col px-4 py-24 sm:px-6">
       <Card>
         <CardHeader className="items-center text-center">
           <Lock className="mb-2 size-8 text-muted-foreground" />

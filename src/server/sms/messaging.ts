@@ -1,41 +1,10 @@
-import type { MessageChannel, MessageKind } from "@prisma/client";
+import type { MessageKind, MessageStatus } from "@prisma/client";
 import type { db as Db } from "@/server/db";
 import { openSecret } from "@/server/security/secret-box";
 import { normalizeTrMobile } from "@/lib/phone";
 import { NetgsmError, sendNetgsm } from "@/server/sms/netgsm";
 
 type DB = typeof Db;
-
-export const DEFAULT_REMINDER_TEXT =
-  "Sayın {ad}, {randevu_tarihi} günü saat {randevu_saati} {klinik} randevunuzu hatırlatırız. Hekim: {hekim}";
-
-const APPOINTMENT_TOKENS = ["{randevu_tarihi}", "{randevu_saati}", "{hekim}"];
-const TZ = "Europe/Istanbul";
-
-export type MessageContext = {
-  patientName: string;
-  clinicName: string;
-  appointment?: { startsAt: Date; doctorName: string } | null;
-};
-
-export function usesAppointmentTokens(body: string) {
-  return APPOINTMENT_TOKENS.some((t) => body.includes(t));
-}
-
-/** Fills {ad}/{klinik}/{randevu_*}/{hekim}; appointment tokens need an appointment. */
-export function renderMessage(body: string, ctx: MessageContext): string {
-  if (usesAppointmentTokens(body) && !ctx.appointment) {
-    throw new Error("Mesajda randevu bilgisi var ama hastanın yaklaşan randevusu yok.");
-  }
-  const a = ctx.appointment;
-  return body
-    .replaceAll("{ad}", ctx.patientName)
-    .replaceAll("{klinik}", ctx.clinicName)
-    .replaceAll("{randevu_tarihi}", a ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeZone: TZ }).format(a.startsAt) : "")
-    .replaceAll("{randevu_saati}", a ? new Intl.DateTimeFormat("tr-TR", { timeStyle: "short", timeZone: TZ }).format(a.startsAt) : "")
-    .replaceAll("{hekim}", a?.doctorName ?? "")
-    .trim();
-}
 
 export async function loadSmsSettings(db: DB, organizationId: string) {
   const settings = await db.smsSettings.findUnique({ where: { organizationId } });
@@ -52,38 +21,47 @@ export class MessagingError extends Error {
   }
 }
 
+type LogArgs = {
+  organizationId: string;
+  phone: string;
+  body: string;
+  kind: MessageKind;
+  patientId?: string | null;
+  appointmentId?: string | null;
+  automationId?: string | null;
+  sentByUserId?: string | null;
+};
+
+export function logMessage(
+  db: DB,
+  args: LogArgs & { channel: "SMS" | "WHATSAPP"; status: MessageStatus; providerRef?: string; errorMessage?: string },
+) {
+  return db.messageLog.create({
+    data: {
+      organizationId: args.organizationId,
+      channel: args.channel,
+      kind: args.kind,
+      status: args.status,
+      patientId: args.patientId ?? null,
+      appointmentId: args.appointmentId ?? null,
+      automationId: args.automationId ?? null,
+      phone: args.phone,
+      body: args.body,
+      sentByUserId: args.sentByUserId ?? null,
+      providerRef: args.providerRef,
+      errorMessage: args.errorMessage,
+    },
+  });
+}
+
 /**
  * Sends one SMS through the clinic's own provider account and records it
  * in MessageLog either way. Throws MessagingError on failure (after
  * logging), so callers can surface the reason.
  */
-export async function sendSmsAndLog(
-  db: DB,
-  args: {
-    organizationId: string;
-    phone: string;
-    body: string;
-    kind: MessageKind;
-    patientId?: string | null;
-    appointmentId?: string | null;
-    sentByUserId?: string | null;
-  },
-) {
+export async function sendSmsAndLog(db: DB, args: LogArgs) {
   const log = (status: "SENT" | "FAILED", extra: { providerRef?: string; errorMessage?: string }) =>
-    db.messageLog.create({
-      data: {
-        organizationId: args.organizationId,
-        channel: "SMS",
-        kind: args.kind,
-        status,
-        patientId: args.patientId ?? null,
-        appointmentId: args.appointmentId ?? null,
-        phone: args.phone,
-        body: args.body,
-        sentByUserId: args.sentByUserId ?? null,
-        ...extra,
-      },
-    });
+    logMessage(db, { ...args, channel: "SMS", status, ...extra });
 
   const phone = normalizeTrMobile(args.phone);
   if (!phone) {
@@ -94,7 +72,7 @@ export async function sendSmsAndLog(
   const loaded = await loadSmsSettings(db, args.organizationId);
   if (!loaded) {
     await log("FAILED", { errorMessage: "SMS hesabı bağlı değil." });
-    throw new MessagingError("SMS hesabınız bağlı değil. SMS Hizmetleri → Ayarlar'dan NetGSM hesabınızı bağlayın.");
+    throw new MessagingError("SMS hesabınız bağlı değil. SMS Hizmetleri → Hesap'tan NetGSM hesabınızı bağlayın.");
   }
 
   try {
@@ -105,25 +83,4 @@ export async function sendSmsAndLog(
     await log("FAILED", { errorMessage: message });
     throw new MessagingError(message, e instanceof NetgsmError && e.transient);
   }
-}
-
-/** Records a WhatsApp click-to-chat open (we can't observe the actual send). */
-export async function logWhatsappOpen(
-  db: DB,
-  args: { organizationId: string; phone: string; body: string; patientId?: string | null; appointmentId?: string | null; sentByUserId: string; kind?: MessageKind },
-) {
-  const channel: MessageChannel = "WHATSAPP";
-  return db.messageLog.create({
-    data: {
-      organizationId: args.organizationId,
-      channel,
-      kind: args.kind ?? "MANUAL",
-      status: "OPENED",
-      phone: args.phone,
-      body: args.body,
-      patientId: args.patientId ?? null,
-      appointmentId: args.appointmentId ?? null,
-      sentByUserId: args.sentByUserId,
-    },
-  });
 }

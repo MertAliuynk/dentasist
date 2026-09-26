@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,7 @@ export default function DailyCashRegisterPage() {
       utils.cashRegister.listByDate.invalidate();
       utils.paymentPlan.listForPatient.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   function shiftDay(delta: number) {
@@ -61,7 +62,7 @@ export default function DailyCashRegisterPage() {
   const net = (data?.byMethod.NAKIT ?? 0) + (data?.byMethod.HAVALE ?? 0) + (data?.byMethod.KREDI_KARTI ?? 0);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button variant="ghost" size="icon" aria-label="Önceki gün" onClick={() => shiftDay(-1)}>
           <ChevronLeft className="size-4" />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ export function LabPatientDetailClient({ patientId }: { patientId: string }) {
       utils.lab.patient.getById.invalidate();
       utils.lab.treatment.list.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   if (!patient || !me) {
@@ -42,7 +43,7 @@ export function LabPatientDetailClient({ patientId }: { patientId: string }) {
   const isTeknisyenOrPatron = roles.includes("TEKNISYEN") || roles.includes("PATRON");
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-4xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{patient.fullName}</h1>

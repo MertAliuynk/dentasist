@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ function DoctorColorCell({ doctorId }: { doctorId: string }) {
       toast.success("Renk güncellendi.");
       utils.doctor.list.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   if (!doctor) return <span className="text-muted-foreground">—</span>;
@@ -129,7 +130,7 @@ function PermissionDialog({
       utils.staffAdmin.listStaff.invalidate();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   if (!staff) return null;
@@ -277,7 +278,7 @@ function StaffDirectory() {
       toast.success("Durum güncellendi.");
       utils.staffAdmin.listStaff.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -374,7 +375,7 @@ function StaffDirectory() {
 
 export function StaffAdminClient({ moduleLabel }: { moduleLabel: string }) {
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Yönetim</h1>
         <p className="text-sm text-muted-foreground">

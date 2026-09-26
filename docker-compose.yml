@@ -38,6 +38,8 @@ services:
       # Encrypts stored SMS provider passwords (falls back to AUTH_SECRET).
       SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
       SMS_REMINDER_WORKER: ${SMS_REMINDER_WORKER:-on}
+      # Server's public outbound IP, shown to clinics for NetGSM IP whitelisting.
+      SMS_OUTBOUND_IP: ${SMS_OUTBOUND_IP:-}
     ports:
       - "3000:3000"
 

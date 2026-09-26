@@ -34,9 +34,7 @@ model Organization {
   // Randevu Ayarları
   appointmentDurationMinutes Int     @default(30)
   appointmentBufferMinutes   Int     @default(0)
-  // Hatırlatma (SMS) / Anamnez / Onam ayarları — toggles stored ahead of the
-  // features themselves (SMS Hizmetleri, Onam Formu) being built out.
-  smsRemindersEnabled        Boolean @default(false)
+  // Anamnez / Onam zorunluluk ayarları (SMS otomasyonları: SmsAutomation).
   anamnezRequired            Boolean @default(false)
   onamRequired               Boolean @default(false)
 
@@ -81,6 +79,7 @@ model Organization {
   patientXrays           PatientXray[]
   activityLogs           ActivityLog[]
   smsSettings            SmsSettings?
+  smsAutomations         SmsAutomation[]
   messageLogs            MessageLog[]
 }
 
@@ -252,6 +251,7 @@ model User {
   messageTemplatesCreated MessageTemplate[]
   xraysUploaded           PatientXray[]
   messagesSent            MessageLog[]
+  stockMovements          StockMovement[]             @relation("StockMovementCreatedBy")
 }
 
 model Account {
@@ -381,6 +381,8 @@ model Patient {
   anamnesisAnswers Json?
   primaryDoctorId  String?
   primaryDoctor    Doctor?      @relation(fields: [primaryDoctorId], references: [id])
+  // Hasta SMS almak istemiyor — automations skip them (manual sends still allowed, with a warning).
+  smsOptOut        Boolean      @default(false)
   deletedAt        DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
@@ -427,24 +429,22 @@ enum MessageChannel {
   WHATSAPP
 }
 
-// A reusable message template for the SMS/WhatsApp Hizmetleri pages.
-// Sending itself isn't wired to a provider yet — this just backs the
-// template-management UI (create/edit/delete per channel).
+// A reusable message template for the SMS/WhatsApp Hizmetleri pages. Body
+// holds placeholders ({ad}, {randevu_saati}, …) filled per recipient at
+// send time — see src/lib/message-render.ts for the full list.
 model MessageTemplate {
   id              String         @id @default(cuid())
   organizationId  String
   organization    Organization   @relation(fields: [organizationId], references: [id])
   channel         MessageChannel
   name            String
-  // Free text with {ad}, {randevu_tarihi}, {randevu_saati}, {hekim}, {klinik}
-  // placeholders — substituted client-side for preview purposes.
   body            String         @db.Text
   createdByUserId String?
   createdBy       User?          @relation(fields: [createdByUserId], references: [id])
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  usedForSmsReminders SmsSettings[]
+  automations SmsAutomation[]
 
   @@index([organizationId, channel])
 }
@@ -456,29 +456,88 @@ enum SmsProvider {
 // A clinic's own SMS provider account (they buy credit from the provider
 // directly; we just send through it). The password is AES-GCM encrypted at
 // rest (src/server/security/secret-box.ts) and never sent back to the
-// browser. Reminder on/off lives on Organization.smsRemindersEnabled.
+// browser. What gets sent automatically is configured per SmsAutomation.
 model SmsSettings {
-  id                  String           @id @default(cuid())
-  organizationId      String           @unique
-  organization        Organization     @relation(fields: [organizationId], references: [id])
-  provider            SmsProvider      @default(NETGSM)
-  username            String
-  passwordEnc         String
-  msgheader           String
-  // How long before an appointment the automatic reminder goes out.
-  reminderHoursBefore Int              @default(24)
-  // Template used for reminders; null → built-in default text.
-  reminderTemplateId  String?
-  reminderTemplate    MessageTemplate? @relation(fields: [reminderTemplateId], references: [id], onDelete: SetNull)
-  lastVerifiedAt      DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  provider       SmsProvider  @default(NETGSM)
+  username       String
+  passwordEnc    String
+  msgheader      String
+  lastVerifiedAt DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+enum SmsAutomationTrigger {
+  APPOINTMENT_BEFORE // randevudan önce (hatırlatma)
+  APPOINTMENT_CREATED // randevu oluşturulunca (onay)
+  APPOINTMENT_AFTER // randevudan sonra — only if the patient came (ARRIVED/COMPLETED)
+  NO_SHOW // randevuya gelmeyen hastaya
+  BIRTHDAY // doğum günü
+  RECALL // son ziyaretten N gün sonra, ileri randevusu yoksa (kontrol çağrısı)
+}
+
+enum SmsTimingMode {
+  // offsetMinutes before/after the event ("2 saat önce")
+  RELATIVE
+  // dayOffset days before/after the event's day, at sendTime ("1 gün önce 18:00")
+  FIXED_TIME
+}
+
+// One "Otomatik Mesaj" rule. The engine (src/server/sms/automations.ts)
+// evaluates every enabled rule every few minutes and sends the rendered
+// template to each matching patient exactly once (see SmsDelivery).
+model SmsAutomation {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  name           String
+  trigger        SmsAutomationTrigger
+  enabled        Boolean              @default(true)
+  // null → built-in default text for the trigger.
+  templateId     String?
+  template       MessageTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  timingMode     SmsTimingMode        @default(RELATIVE)
+  offsetMinutes  Int                  @default(0)
+  dayOffset      Int                  @default(0)
+  // "HH:MM", Europe/Istanbul — used by FIXED_TIME, BIRTHDAY and RECALL.
+  sendTime       String?
+  // RECALL only: days since the last visit.
+  recallDays     Int?
+  // Events whose send time falls before this aren't sent — enabling a rule
+  // (or changing its timing) must not blast everyone it "missed".
+  activeSince    DateTime             @default(now())
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  deliveries  SmsDelivery[]
+  messageLogs MessageLog[]
+
+  @@index([organizationId, enabled])
+}
+
+// Exactly-once guard: a row is inserted (unique on automation+dedupeKey)
+// *before* sending, so concurrent runs can't double-send. dedupeKey encodes
+// what the message was about — e.g. "<appointmentId>@<startsAt>" (so a
+// rescheduled appointment gets a fresh reminder), "<patientId>:2026" for a
+// birthday.
+model SmsDelivery {
+  id           String        @id @default(cuid())
+  automationId String
+  automation   SmsAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  dedupeKey    String
+  createdAt    DateTime      @default(now())
+
+  @@unique([automationId, dedupeKey])
 }
 
 enum MessageKind {
   MANUAL
   REMINDER
   TEST
+  AUTOMATION
 }
 
 enum MessageStatus {
@@ -487,6 +546,8 @@ enum MessageStatus {
   // WhatsApp: we only open wa.me with the text filled in; the user
   // presses send on their own phone, so we can't know it was delivered.
   OPENED
+  // Automation matched but the patient opted out of SMS / has no mobile.
+  SKIPPED
 }
 
 // Every SMS/WhatsApp message the system sent (or tried to) — shown on the
@@ -502,6 +563,8 @@ model MessageLog {
   patient        Patient?       @relation(fields: [patientId], references: [id], onDelete: SetNull)
   appointmentId  String?
   appointment    Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  automationId   String?
+  automation     SmsAutomation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
   phone          String
   body           String         @db.Text
   providerRef    String?
@@ -512,6 +575,7 @@ model MessageLog {
 
   @@index([organizationId, createdAt])
   @@index([appointmentId])
+  @@index([automationId, createdAt])
 }
 
 // A röntgen/görüntü file uploaded for a patient — the file bytes live in
@@ -580,9 +644,6 @@ model Appointment {
   // separate context-free "Tedavi Bitti" button) — shown in Randevu Geçmişi.
   completedTreatmentId String?           @unique
   completedTreatment   Treatment?        @relation(fields: [completedTreatmentId], references: [id])
-  // Set (atomically, as a claim) when the automatic SMS reminder is sent;
-  // cleared on reschedule so the new time gets its own reminder.
-  reminderSentAt       DateTime?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -770,10 +831,14 @@ model Supplier {
   phone          String?
   email          String?
   address        String?
+  contactName    String?
+  taxNumber      String?
+  note           String?
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
 
-  products StockProduct[]
+  products  StockProduct[]
+  movements StockMovement[]
 
   @@unique([organizationId, name])
 }
@@ -789,16 +854,46 @@ model StockProduct {
   supplierId     String?
   supplier       Supplier?      @relation(fields: [supplierId], references: [id])
   name           String
+  // Ürün kodu / barkod and brand — how staff actually find a material.
+  code           String?
+  brand          String?
   unit           String         @default("adet")
+  // Cached total of all lots' remaining quantity (kept in sync in the same
+  // transaction as every movement) so lists don't have to sum lots.
   quantity       Int            @default(0)
   criticalLevel  Int            @default(0)
+  // "İdeal stok" — what a reorder should bring it back up to.
+  targetLevel    Int?
+  // Last purchase price per unit (kuruş); lots keep their own cost.
   unitPrice      Int?
+  note           String?
   deletedAt      DateTime?
   createdAt      DateTime       @default(now())
 
   movements StockMovement[]
+  lots      StockLot[]
 
   @@index([organizationId, branchId])
+}
+
+// A received batch of a product ("parti / lot"). Stock leaves in FEFO
+// order (first expiring, first out) across lots; `quantity` is what's left
+// of this batch. Lots without an expiry date sort last.
+model StockLot {
+  id              String       @id @default(cuid())
+  organizationId  String
+  productId       String
+  product         StockProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  lotNo           String?
+  expiryDate      DateTime?
+  quantity        Int
+  initialQuantity Int
+  unitCost        Int?
+  receivedAt      DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+
+  @@index([productId, expiryDate])
+  @@index([organizationId, expiryDate])
 }
 
 enum StockMovementType {
@@ -806,24 +901,47 @@ enum StockMovementType {
   CIKIS
 }
 
+enum StockMovementReason {
+  SATIN_ALMA // purchase / delivery
+  ACILIS // opening balance
+  KULLANIM // general clinic use
+  HASTA_KULLANIMI // used on a specific patient
+  SAYIM // inventory count correction (either direction)
+  FIRE // damaged / wasted
+  SKT_IMHA // expired, disposed
+  IADE // returned to supplier
+}
+
 model StockMovement {
-  id              String            @id @default(cuid())
+  id              String               @id @default(cuid())
   organizationId  String
-  organization    Organization      @relation(fields: [organizationId], references: [id])
+  organization    Organization         @relation(fields: [organizationId], references: [id])
   productId       String
-  product         StockProduct      @relation(fields: [productId], references: [id])
+  product         StockProduct         @relation(fields: [productId], references: [id])
   branchId        String
-  branch          Branch            @relation(fields: [branchId], references: [id])
+  branch          Branch               @relation(fields: [branchId], references: [id])
   type            StockMovementType
+  reason          StockMovementReason?
   quantity        Int
+  // Purchase details (GIRIS).
+  unitCost        Int?
+  supplierId      String?
+  supplier        Supplier?            @relation(fields: [supplierId], references: [id])
+  invoiceNo       String?
+  lotNo           String?
+  expiryDate      DateTime?
+  // CIKIS: which lots it was taken from — [{ lotId, lotNo, expiryDate, quantity }].
+  lotBreakdown    Json?
   patientId       String?
-  patient         Patient?          @relation(fields: [patientId], references: [id])
+  patient         Patient?             @relation(fields: [patientId], references: [id])
   note            String?
   createdByUserId String
-  createdAt       DateTime          @default(now())
+  createdBy       User                 @relation("StockMovementCreatedBy", fields: [createdByUserId], references: [id])
+  createdAt       DateTime             @default(now())
 
   @@index([organizationId, productId, createdAt])
   @@index([organizationId, branchId])
+  @@index([organizationId, createdAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -1189,9 +1307,13 @@ model AuditLog {
 // admin panel to debug "X yaparken hata aldım" reports; inputs are stored
 // with secrets redacted and size-capped.
 model ActivityLog {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String        @id @default(cuid())
+  // Null for errors we can't tie to a clinic (e.g. a server render crash).
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Short code shown to the user on error screens ("HT-7F3A91C2" or the
+  // Next.js error digest) so a support ticket can point at this exact row.
+  ref            String?
   userId         String?
   userName       String?
   // tRPC procedure path (e.g. "patient.create") or "auth.login".
@@ -1200,14 +1322,15 @@ model ActivityLog {
   input          Json?
   ok             Boolean
   errorCode      String?
-  errorMessage   String?      @db.Text
+  errorMessage   String?       @db.Text
   durationMs     Int?
   ip             String?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime      @default(now())
 
   @@index([organizationId, createdAt])
   @@index([organizationId, ok, createdAt])
   @@index([ok, createdAt])
+  @@index([ref])
 }
 
 enum SupportTicketStatus {
@@ -1235,37 +1358,73 @@ enum SupportTicketCategory {
 // reply — replies are just messages with an authorPlatformUserId instead of
 // an authorUserId.
 model SupportTicket {
-  id              String                @id @default(cuid())
-  organizationId  String
-  organization    Organization          @relation(fields: [organizationId], references: [id])
-  createdByUserId String
-  createdBy       User                  @relation(fields: [createdByUserId], references: [id])
-  subject         String
-  priority        SupportTicketPriority @default(NORMAL)
-  category        SupportTicketCategory @default(DIGER)
-  status          SupportTicketStatus   @default(OPEN)
-  createdIp       String?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id                 String                @id @default(cuid())
+  organizationId     String
+  organization       Organization          @relation(fields: [organizationId], references: [id])
+  createdByUserId    String
+  createdBy          User                  @relation(fields: [createdByUserId], references: [id])
+  subject            String
+  priority           SupportTicketPriority @default(NORMAL)
+  category           SupportTicketCategory @default(DIGER)
+  status             SupportTicketStatus   @default(OPEN)
+  // Clinic users can only attach images once support turns this on for the
+  // ticket ("fotoğraf gönderebilirsiniz") — keeps uploads intentional.
+  attachmentsAllowed Boolean               @default(false)
+  // Set when the ticket was opened from an error screen: { ref, code,
+  // path, operation, message } — lets support jump to the exact failure.
+  errorContext       Json?
+  // Unread tracking for both sides (bell + badges).
+  customerReadAt     DateTime?
+  staffReadAt        DateTime?
+  lastCustomerMsgAt  DateTime?
+  lastStaffMsgAt     DateTime?
+  createdIp          String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   messages SupportTicketMessage[]
 
   @@index([organizationId, status])
+  @@index([status, updatedAt])
+}
+
+enum SupportMessageKind {
+  MESSAGE
+  // Automatic notes: "fotoğraf gönderimi açıldı", "talep kapatıldı"…
+  SYSTEM
 }
 
 model SupportTicketMessage {
-  id                   String        @id @default(cuid())
+  id                   String             @id @default(cuid())
   ticketId             String
-  ticket               SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket               SupportTicket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  kind                 SupportMessageKind @default(MESSAGE)
   authorUserId         String?
-  authorUser           User?         @relation(fields: [authorUserId], references: [id])
+  authorUser           User?              @relation(fields: [authorUserId], references: [id])
   authorPlatformUserId String?
-  authorPlatformUser   PlatformUser? @relation(fields: [authorPlatformUserId], references: [id])
-  body                 String        @db.Text
+  authorPlatformUser   PlatformUser?      @relation(fields: [authorPlatformUserId], references: [id])
+  body                 String             @db.Text
   createdIp            String?
-  createdAt            DateTime      @default(now())
+  createdAt            DateTime           @default(now())
+
+  attachments SupportTicketAttachment[]
 
   @@index([ticketId])
+}
+
+// Image attached to a support message — bytes in the private S3 bucket
+// under support/<orgId>/<ticketId>/…, served via short-lived presigned URLs.
+model SupportTicketAttachment {
+  id          String               @id @default(cuid())
+  messageId   String
+  message     SupportTicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  objectKey   String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  createdAt   DateTime             @default(now())
+
+  @@index([messageId])
 }
 
 // ---------------------------------------------------------------------------

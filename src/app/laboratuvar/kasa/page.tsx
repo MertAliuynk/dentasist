@@ -41,7 +41,7 @@ export default function LabCashRegisterPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-4xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {branches && branches.length > 1 && (
           <Select value={activeBranchId} onValueChange={(v) => setBranchId(v ?? "")}>

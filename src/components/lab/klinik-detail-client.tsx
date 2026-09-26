@@ -18,7 +18,7 @@ export function LabKlinikDetailClient({ klinikId }: { klinikId: string }) {
   if (!data) return <p className="py-16 text-center text-sm text-muted-foreground">Yükleniyor…</p>;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-3xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">{data.klinik.name}</h1>
         <p className="text-sm text-muted-foreground">Hekim başına borç dökümü.</p>

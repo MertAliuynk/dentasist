@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { FileSignature, Printer, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,7 +84,7 @@ function OnamFormuClient() {
     onSuccess: () => {
       if (patientId) utils.patientConsentForm.list.invalidate({ patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   function handlePrint() {
@@ -94,7 +94,7 @@ function OnamFormuClient() {
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-4xl flex-col gap-4">
       <Card className="print:hidden">
         <CardHeader>
           <CardTitle className="text-base">Onam Formları</CardTitle>

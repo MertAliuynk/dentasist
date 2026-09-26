@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +49,7 @@ export function AddStageDialog({
       setDueDate("");
       setNote("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (

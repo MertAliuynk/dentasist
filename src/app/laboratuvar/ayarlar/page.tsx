@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ function BranchSection() {
       setAddress("");
       setPhone("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -124,7 +125,7 @@ function KlinikSection() {
       setPhone("");
       setAddress("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -236,7 +237,7 @@ function StaffSection() {
       setPassword("");
       setKlinikId("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const branchKlinikler = klinikler?.filter((k) => k.branchId === branchId) ?? [];
@@ -447,7 +448,7 @@ function TreatmentTypeSection() {
   const utils = trpc.useUtils();
   const create = trpc.lab.treatmentType.create.useMutation({
     onSuccess: () => utils.lab.treatmentType.list.invalidate(),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -467,7 +468,7 @@ function StageCatalogSection() {
   const utils = trpc.useUtils();
   const create = trpc.lab.stageCatalog.create.useMutation({
     onSuccess: () => utils.lab.stageCatalog.list.invalidate(),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -486,7 +487,7 @@ function ToothColorSection() {
   const utils = trpc.useUtils();
   const create = trpc.lab.toothColor.create.useMutation({
     onSuccess: () => utils.lab.toothColor.list.invalidate(),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -505,7 +506,7 @@ function ExpenseCategorySection() {
   const utils = trpc.useUtils();
   const create = trpc.lab.expenseCategory.create.useMutation({
     onSuccess: () => utils.lab.expenseCategory.list.invalidate(),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -525,7 +526,7 @@ export default function LabSettingsPage() {
   const canManageCatalog = hasCapability(roles, "lab:catalog:manage", me?.capabilityOverrides);
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-3xl flex-col gap-4">
       <BranchSection />
       <KlinikSection />
       <StaffSection />

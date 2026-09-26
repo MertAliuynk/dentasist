@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -35,6 +37,7 @@ type PatientLike = {
   anamnesis: string | null;
   anamnesisAnswers: unknown;
   primaryDoctorId: string | null;
+  smsOptOut?: boolean;
 };
 
 // Rendered only while the dialog is open (see PatientEditDialog below), so
@@ -59,6 +62,7 @@ function PatientEditForm({
     (patient.anamnesisAnswers as AnamnesisAnswers | null) ?? {},
   );
   const [primaryDoctorId, setPrimaryDoctorId] = useState(patient.primaryDoctorId ?? "");
+  const [smsOptOut, setSmsOptOut] = useState(patient.smsOptOut ?? false);
 
   const { data: branches } = trpc.branch.list.useQuery();
   const { data: doctors } = trpc.doctor.list.useQuery();
@@ -70,7 +74,7 @@ function PatientEditForm({
       utils.patient.getById.invalidate({ id: patient.id });
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -123,6 +127,13 @@ function PatientEditForm({
             </SelectContent>
           </Select>
         </div>
+        <label className="flex items-center justify-between gap-2 rounded-md border border-border p-3 text-sm">
+          <span>
+            Otomatik SMS almak istemiyor
+            <span className="block text-xs text-muted-foreground">Hatırlatma, doğum günü vb. otomatik mesajlar bu hastaya gönderilmez.</span>
+          </span>
+          <Switch checked={smsOptOut} onCheckedChange={setSmsOptOut} />
+        </label>
         <div className="space-y-2">
           <Label>TC Kimlik No</Label>
           <Input value={tcKimlikNo} onChange={(e) => setTcKimlikNo(e.target.value)} maxLength={11} />
@@ -157,6 +168,7 @@ function PatientEditForm({
               birthDate: birthDate || null,
               anamnesis: anamnesis || null,
               anamnesisAnswers,
+              smsOptOut,
             })
           }
         >

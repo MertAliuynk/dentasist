@@ -43,7 +43,7 @@ export default function MuhasebeReportsPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-5xl flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Raporlar — Genel Bakış</CardTitle>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ export default function CallbacksPage() {
       setReason("");
       setNote("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const resolve = trpc.followUp.resolve.useMutation({
@@ -55,14 +56,14 @@ export default function CallbacksPage() {
       toast.success("Çözüldü olarak işaretlendi.");
       utils.followUp.list.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const pending = followUps?.filter((f) => f.status === "PENDING") ?? [];
   const done = followUps?.filter((f) => f.status === "DONE") ?? [];
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto w-full max-w-3xl">
       <Card>
         <CardHeader className="flex flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
           <div>

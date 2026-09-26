@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { Printer, Plus, CalendarPlus, StickyNote, Pencil, UserRound, Trash2, CheckCheck, FileSignature } from "lucide-react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,7 @@ function CompanionSection({
       setFullName("");
       setPhone("");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const deleteCompanion = trpc.patient.deleteCompanion.useMutation({
@@ -82,7 +83,7 @@ function CompanionSection({
       toast.success("Refakatçi silindi.");
       utils.patient.getById.invalidate({ id: patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -201,7 +202,7 @@ export function PatientCardClient({ patientId }: { patientId: string }) {
       setNoteBody("");
       utils.patient.getById.invalidate({ id: patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const updateTreatmentStatus = trpc.treatment.updateStatus.useMutation({
@@ -209,7 +210,7 @@ export function PatientCardClient({ patientId }: { patientId: string }) {
       toast.success("Tedavi durumu güncellendi.");
       utils.patient.getById.invalidate({ id: patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const deleteTreatment = trpc.treatment.delete.useMutation({
@@ -217,7 +218,7 @@ export function PatientCardClient({ patientId }: { patientId: string }) {
       toast.success("Tedavi silindi.");
       utils.patient.getById.invalidate({ id: patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const approveMany = trpc.treatment.approveMany.useMutation({
@@ -226,7 +227,7 @@ export function PatientCardClient({ patientId }: { patientId: string }) {
       setSelectedProposedIds(new Set());
       utils.patient.getById.invalidate({ id: patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   if (isLoading) {
@@ -237,7 +238,7 @@ export function PatientCardClient({ patientId }: { patientId: string }) {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <div className="flex flex-wrap justify-center gap-2 print:hidden">
         <Button
           size="sm"

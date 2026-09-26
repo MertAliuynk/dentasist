@@ -28,7 +28,7 @@ export default function PlatformDashboardPage() {
 
   const s = data.statusCounts;
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Toplam Klinik" value={data.total} href="/admin/organizasyonlar" />
         <Stat label="Aktif Üyelik" value={s.ACTIVE ?? 0} href="/admin/organizasyonlar?filtre=ACTIVE" />
@@ -87,12 +87,16 @@ export default function PlatformDashboardPage() {
                 {data.recentErrors.map((e) => (
                   <Link
                     key={e.id}
-                    href={`/admin/organizasyonlar/${e.organizationId}?sekme=kayitlar&hatalar=1`}
+                    href={
+                      e.organizationId
+                        ? `/admin/organizasyonlar/${e.organizationId}?sekme=kayitlar&ara=${encodeURIComponent(e.ref ?? "")}&hatalar=1`
+                        : "/admin/hatalar"
+                    }
                     className="flex flex-col gap-0.5 py-2 text-sm hover:text-foreground"
                     title={fmtDateTime(e.createdAt)}
                   >
                     <span className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 truncate font-medium">{e.organization.name}</span>
+                      <span className="min-w-0 truncate font-medium">{e.organization?.name ?? "Genel (oturumsuz)"}</span>
                       <span className="shrink-0 text-xs text-muted-foreground">{fmtRelative(e.createdAt)}</span>
                     </span>
                     <span className="truncate text-xs text-muted-foreground">

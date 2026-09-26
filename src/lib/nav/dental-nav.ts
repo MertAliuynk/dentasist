@@ -32,7 +32,6 @@ export const dentalNav: NavItem[] = [
       { href: "/dental/anamnez-formlari", label: "Anamnez Formları", icon: "FileHeart", section: "Sayfalar" },
     ],
   },
-  { href: "/dental/geri-donusler", label: "Geri Dönüşler", icon: "PhoneIncoming", section: "Sayfalar" },
   { href: "/dental/stok-takibi", label: "Stok Takibi", icon: "Boxes", section: "Sayfalar" },
   { href: "/dental/hizmetler", label: "Hizmetler", icon: "Briefcase", section: "Sayfalar" },
   { href: "/dental/sms-hizmetleri", label: "SMS Hizmetleri", icon: "MessageSquare", section: "Sayfalar" },

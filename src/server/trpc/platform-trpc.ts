@@ -3,13 +3,26 @@ import superjson from "superjson";
 import type { PlatformTRPCContext } from "@/server/trpc/platform-context";
 import { hasPlatformCapability, alwaysSeesSensitiveData, type PlatformCapability } from "@/server/rbac/platform-permissions";
 import { checkRateLimit } from "@/server/security/rate-limit";
+import { attachRef, formatError, newErrorRef } from "@/server/trpc/error-format";
 
-const t = initTRPC.context<PlatformTRPCContext>().create({ transformer: superjson });
+const t = initTRPC.context<PlatformTRPCContext>().create({ transformer: superjson, errorFormatter: formatError });
+
+// Platform errors get a ref too and unexpected ones hit the server log;
+// they aren't written to ActivityLog (that's the clinics' trail).
+const errorRef = t.middleware(async ({ path, next }) => {
+  const result = await next();
+  if (!result.ok) {
+    const ref = newErrorRef();
+    attachRef(result.error, ref);
+    if (result.error.code === "INTERNAL_SERVER_ERROR") console.error(`[platform-trpc] ${ref} ${path}:`, result.error.cause ?? result.error);
+  }
+  return result;
+});
 
 export const platformRouter = t.router;
-export const platformPublicProcedure = t.procedure;
+export const platformPublicProcedure = t.procedure.use(errorRef);
 
-export const platformProcedure = t.procedure.use(({ ctx, type, next }) => {
+export const platformProcedure = t.procedure.use(errorRef).use(({ ctx, type, next }) => {
   if (!ctx.session?.platformUser) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }

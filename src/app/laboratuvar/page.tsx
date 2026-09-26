@@ -15,7 +15,7 @@ export default function LabDashboardPage() {
   const { data: activeJobs } = trpc.lab.treatment.list.useQuery({ status: "DEVAM_EDIYOR" }, { enabled: !!me });
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Laboratuvar</h1>
         <p className="text-sm text-muted-foreground">Genel görünüm.</p>

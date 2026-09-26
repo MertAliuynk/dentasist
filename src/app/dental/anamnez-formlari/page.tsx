@@ -71,7 +71,7 @@ export default function AnamnezFormlariPage() {
   const { data: patient } = trpc.patient.getById.useQuery({ id: patientId ?? "" }, { enabled: !!patientId });
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-3xl flex-col gap-4">
       <Card className="print:hidden">
         <CardHeader>
           <CardTitle className="text-base">Anamnez Formları</CardTitle>

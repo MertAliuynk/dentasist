@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createQueryClient } from "@/lib/query-client";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import { platformTrpc } from "@/lib/platform-trpc/client";
@@ -13,7 +14,7 @@ function getBaseUrl() {
 }
 
 export function PlatformTRPCProvider({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(createQueryClient);
   const [trpcClient] = useState(() =>
     platformTrpc.createClient({
       links: [

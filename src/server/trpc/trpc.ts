@@ -5,15 +5,16 @@ import { hasCapability, type Capability } from "@/server/rbac/permissions";
 import { resolveAccessibleBranchIds } from "@/server/rbac/scope";
 import { checkRateLimit } from "@/server/security/rate-limit";
 import { recordActivity } from "@/server/services/activity-log";
+import { attachRef, formatError, newErrorRef } from "@/server/trpc/error-format";
 import { isSubscriptionUsable } from "@/lib/subscription-access";
 import type { ModuleKey } from "@prisma/client";
 
 const t = initTRPC.context<TRPCContext>().create({
   transformer: superjson,
+  errorFormatter: formatError,
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
 
 // Every authenticated write goes through here, not just login/signup —
 // generous enough (2/sec sustained) to never bother normal UI usage, but
@@ -31,24 +32,48 @@ const activityLogger = t.middleware(async ({ ctx, type, path, getRawInput, next 
   const startedAt = Date.now();
   const result = await next();
   const user = ctx.session?.user;
-  if (user?.organizationId && (type === "mutation" || !result.ok)) {
+  // Every failure gets a short ref the user sees (error toast / screen)
+  // and support can search for in the logs.
+  const ref = result.ok ? null : newErrorRef();
+  if (!result.ok) {
+    attachRef(result.error, ref!);
+    if (result.error.code === "INTERNAL_SERVER_ERROR") {
+      console.error(`[trpc] ${ref} ${path}:`, result.error.cause ?? result.error);
+    }
+  }
+  const worthLogging = user ? type === "mutation" || !result.ok : !result.ok && result.error.code !== "UNAUTHORIZED";
+  if (worthLogging) {
     const input = await getRawInput().catch(() => undefined);
     recordActivity({
-      organizationId: user.organizationId,
-      userId: user.id,
-      userName: user.name,
+      organizationId: user?.organizationId ?? null,
+      ref,
+      userId: user?.id ?? null,
+      userName: user?.name ?? null,
       path,
       kind: type === "mutation" ? "mutation" : "query",
       input,
       ok: result.ok,
       errorCode: result.ok ? null : result.error.code,
-      errorMessage: result.ok ? null : result.error.message,
+      // The raw (internal) message — only ever shown in the admin panel.
+      errorMessage: result.ok ? null : describeCause(result.error),
       durationMs: Date.now() - startedAt,
       ip: ctx.clientIp,
     });
   }
   return result;
 });
+
+// Public procedures (signup…) are logged too — failures there are exactly
+// the ones a would-be customer can't report any other way.
+export const publicProcedure = t.procedure.use(activityLogger);
+
+function describeCause(error: TRPCError) {
+  const cause = error.cause;
+  if (cause && cause !== error && cause instanceof Error && cause.message !== error.message) {
+    return `${error.message}\n→ ${cause.name}: ${cause.message}`;
+  }
+  return error.message;
+}
 
 export const protectedProcedure = t.procedure.use(activityLogger).use(({ ctx, type, next }) => {
   if (!ctx.session?.user) {

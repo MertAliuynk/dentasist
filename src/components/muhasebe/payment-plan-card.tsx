@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,14 +60,14 @@ function InstallmentRow({ plan, installment }: { plan: Plan; installment: Instal
       toast.success("Taksit tutarı güncellendi.");
       utils.paymentPlan.listForPatient.invalidate({ patientId: plan.patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
   const editDate = trpc.paymentPlan.editInstallmentDueDate.useMutation({
     onSuccess: () => {
       toast.success("Taksit tarihi güncellendi.");
       utils.paymentPlan.listForPatient.invalidate({ patientId: plan.patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const amountChanged = Math.round(Number(amountDraft) * 100) !== installment.amount;
@@ -164,7 +165,7 @@ export function PaymentPlanCard({ plan }: { plan: Plan }) {
       toast.success("Taksit sayısı güncellendi.");
       utils.paymentPlan.listForPatient.invalidate({ patientId: plan.patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const activate = trpc.paymentPlan.activate.useMutation({
@@ -173,7 +174,7 @@ export function PaymentPlanCard({ plan }: { plan: Plan }) {
       utils.paymentPlan.listForPatient.invalidate({ patientId: plan.patientId });
       utils.patient.getFinanceSummary.invalidate({ id: plan.patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   const sum = plan.installments.reduce((s, i) => s + i.amount, 0);

@@ -136,7 +136,7 @@ export default function CrossBranchReviewPage() {
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Mali Yönetim</h1>
         <Button variant="outline" size="sm" onClick={downloadCsv}>

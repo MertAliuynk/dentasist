@@ -28,7 +28,7 @@ export default function LabMyTransactionsPage() {
   const { data: treatments } = trpc.lab.treatment.list.useQuery({ status });
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">İşlemlerim</h1>
         <p className="text-sm text-muted-foreground">Kendi işleriniz ve borç durumunuz.</p>

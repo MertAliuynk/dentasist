@@ -33,7 +33,6 @@ export const organizationRouter = router({
           .optional(),
         appointmentDurationMinutes: z.number().int().min(5).max(480).optional(),
         appointmentBufferMinutes: z.number().int().min(0).max(120).optional(),
-        smsRemindersEnabled: z.boolean().optional(),
         anamnezRequired: z.boolean().optional(),
         onamRequired: z.boolean().optional(),
       }),

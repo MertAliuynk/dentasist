@@ -62,7 +62,7 @@ export default function PaymentListsPage() {
   });
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Ödeme Listeleri</CardTitle>

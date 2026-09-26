@@ -5,12 +5,14 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
+import listPlugin from "@fullcalendar/list";
 import resourcePlugin from "@fullcalendar/resource";
 import resourceDayGridPlugin from "@fullcalendar/resource-daygrid";
 import resourceTimeGridPlugin from "@fullcalendar/resource-timegrid";
 import type { DateSelectArg, EventClickArg, DatesSetArg, EventContentArg } from "@fullcalendar/core";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, CalendarOff, Check, X, Clock3 } from "lucide-react";
+import { toastError } from "@/lib/error-report";
+import { ChevronLeft, ChevronRight, CalendarOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +25,8 @@ import {
 import { trpc } from "@/lib/trpc/client";
 import { AppointmentDialog } from "@/components/dental/appointment-dialog";
 import { CloseSlotDialog } from "@/components/dental/close-slot-dialog";
+import { AppointmentLegend } from "@/components/dental/appointment-legend";
+import { APPT_VISUAL_LABEL, apptVisual, type ApptVisual } from "@/lib/dental/appointment-visual";
 
 const DOCTORS_PER_PAGE = 6;
 
@@ -49,12 +53,17 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELED: "İptal",
 };
 
-function StatusIcon({ status }: { status: string }) {
-  if (status === "ARRIVED" || status === "COMPLETED") return <Check className="size-3 shrink-0" />;
-  if (status === "NO_SHOW" || status === "CANCELED") return <X className="size-3 shrink-0" />;
-  if (status === "POSTPONED") return <Clock3 className="size-3 shrink-0" />;
-  return null;
-}
+
+// Event fills per status — mirrors the .appt-* classes in globals.css.
+const FILL: Record<ApptVisual, (color: string) => string> = {
+  upcoming: (c) => `color-mix(in srgb, ${c} 16%, var(--background))`,
+  overdue: (c) => `color-mix(in srgb, ${c} 16%, var(--background))`,
+  done: (c) => c,
+  noshow: () =>
+    "repeating-linear-gradient(-45deg, color-mix(in srgb, var(--muted-foreground) 14%, var(--background)) 0 6px, var(--background) 6px 12px)",
+  postponed: () => "var(--background)",
+  canceled: () => "var(--background)",
+};
 
 function defaultSlotFor(date: Date) {
   const start = new Date(date);
@@ -69,12 +78,14 @@ function isDoctorOnlyClient(roles: string[]) {
   return set.size === 1 && set.has("DOKTOR");
 }
 
-type ViewKey = "dayGridMonth" | "timeGridWeek" | "doctorDay";
+type ViewKey = "dayGridMonth" | "timeGridWeek" | "doctorDay" | "list";
 
 // Internal view keys stay stable across roles (drives Select state); the
 // actual FullCalendar view name differs — non-doctor roles get the
 // resource-grouped variant of each.
 function resolveFcView(view: ViewKey, doctorOnly: boolean): string {
+  // Agenda list — the readable choice on phones; not resource-based.
+  if (view === "list") return "listDay";
   if (doctorOnly) return view;
   if (view === "dayGridMonth") return "resourceDayGridMonth";
   if (view === "timeGridWeek") return "resourceTimeGridWeek";
@@ -104,7 +115,10 @@ export default function AppointmentCalendarPage() {
   // Non-doctor roles default to "Gün (Hekimler)" — the per-doctor-column
   // hourly grid — since that's the view they actually want to see first;
   // doctor-only accounts default to their own creatable week calendar.
-  const viewType: ViewKey = explicitViewType ?? (doctorOnly ? "timeGridWeek" : "doctorDay");
+  // Phones start on the agenda list — a multi-doctor time grid needs
+  // horizontal scrolling there. Read once at mount (client-only page body).
+  const [isNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
+  const viewType: ViewKey = explicitViewType ?? (isNarrow ? "list" : doctorOnly ? "timeGridWeek" : "doctorDay");
 
   const { data: appointments } = trpc.appointment.listRange.useQuery(
     { start: range?.start ?? "", end: range?.end ?? "" },
@@ -121,7 +135,7 @@ export default function AppointmentCalendarPage() {
       utils.appointment.listRange.invalidate();
     },
     onError: (e) => {
-      toast.error(e.message);
+      toastError(e);
       utils.appointment.listRange.invalidate();
     },
   });
@@ -130,10 +144,12 @@ export default function AppointmentCalendarPage() {
     () =>
       doctorOnly
         ? ([
+            { value: "list", label: "Liste (Gün)" },
             { value: "dayGridMonth", label: "Ay" },
             { value: "timeGridWeek", label: "Hafta" },
           ] as const)
         : ([
+            { value: "list", label: "Liste (Gün)" },
             { value: "dayGridMonth", label: "Ay" },
             { value: "timeGridWeek", label: "Hafta" },
             { value: "doctorDay", label: "Gün (Hekimler)" },
@@ -152,16 +168,24 @@ export default function AppointmentCalendarPage() {
       (appointments ?? []).map((a) => ({
         id: a.id,
         resourceId: a.doctorId,
-        title: a.room ? `${a.patient.fullName} · ${a.room.name}` : a.patient.fullName,
+        title: a.patient.fullName,
         start: a.startsAt,
         end: a.endsAt,
-        backgroundColor: a.doctor.colorHex,
+        // Look comes from the .appt-* classes; borderColor only feeds the
+        // list view's dot, which then shows the doctor's colour.
+        backgroundColor: "transparent",
         borderColor: a.doctor.colorHex,
-        classNames: [
-          a.status === "NO_SHOW" || a.status === "CANCELED" ? "opacity-45" : "",
-          a.status === "POSTPONED" ? "border-dashed" : "",
-        ].filter(Boolean),
-        extendedProps: { status: a.status, note: a.note, doctorName: a.doctor.user.name, patientName: a.patient.fullName },
+        textColor: "inherit",
+        classNames: ["appt", `appt-${apptVisual(a.status, a.startsAt)}`],
+        extendedProps: {
+          status: a.status,
+          visual: apptVisual(a.status, a.startsAt),
+          note: a.note,
+          doctorName: a.doctor.user.name,
+          doctorColor: a.doctor.colorHex,
+          patientName: a.patient.fullName,
+          roomName: a.room?.name ?? null,
+        },
       })),
     [appointments],
   );
@@ -246,14 +270,36 @@ export default function AppointmentCalendarPage() {
     // Background events ("Saat Kapat" blocks) just tint the slot — no card
     // content, let FullCalendar render its default (empty) background.
     if (arg.event.display === "background") return undefined;
-    const { status, note } = arg.event.extendedProps as { status: string; note: string | null };
-    return (
-      <div className="flex flex-col gap-0.5 overflow-hidden px-0.5 text-[11px] leading-tight">
-        <div className="flex items-center gap-1">
-          <StatusIcon status={status} />
-          <span className="truncate font-medium">{arg.event.title}</span>
+    const { visual, note, doctorName, roomName } = arg.event.extendedProps as {
+      visual: ApptVisual;
+      note: string | null;
+      doctorName: string;
+      roomName: string | null;
+    };
+    const isList = arg.view.type.startsWith("list");
+    // On a per-doctor resource grid the column already names the doctor.
+    const showDoctor = isList || !arg.view.type.startsWith("resource");
+    if (isList) {
+      return (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+          <span className="appt-title font-medium">{arg.event.title}</span>
+          <span className="text-xs text-muted-foreground">
+            {doctorName}
+            {roomName && ` · ${roomName}`}
+          </span>
+          <span className={`appt appt-${visual} rounded-full px-2 py-px text-[11px] not-italic`} style={{ "--appt-color": arg.event.borderColor } as React.CSSProperties}>
+            {APPT_VISUAL_LABEL[visual]}
+          </span>
         </div>
-        {note && <span className="truncate text-white/80">{note}</span>}
+      );
+    }
+    return (
+      <div className="flex flex-col gap-0.5 overflow-hidden px-1 py-0.5 text-[11px] leading-tight">
+        <span className="appt-title truncate font-semibold">{arg.event.title}</span>
+        {(showDoctor || roomName) && (
+          <span className="truncate opacity-80">{[showDoctor ? doctorName : null, roomName].filter(Boolean).join(" · ")}</span>
+        )}
+        {note && <span className="truncate opacity-75">{note}</span>}
       </div>
     );
   }
@@ -266,6 +312,21 @@ export default function AppointmentCalendarPage() {
       arg.el.title = arg.event.title || "Kapalı";
       return;
     }
+    // The doctor's colour drives every .appt-* style on this element.
+    const color = (arg.event.extendedProps.doctorColor as string) ?? "#6366f1";
+    arg.el.style.setProperty("--appt-color", color);
+    // FullCalendar paints its own inline background; set ours inline with
+    // priority so the status fill always shows (list rows stay transparent).
+    if (!arg.el.classList.contains("fc-list-event")) {
+      const fill = FILL[arg.event.extendedProps.visual as ApptVisual];
+      if (fill) arg.el.style.setProperty("background", fill(color), "important");
+      if (arg.event.extendedProps.visual === "done") arg.el.style.setProperty("color", "#fff", "important");
+      if (arg.event.extendedProps.visual === "overdue") {
+        // Amber "needs marking" outline, doctor colour kept on the left bar.
+        arg.el.style.setProperty("border-color", "#f59e0b", "important");
+        arg.el.style.setProperty("border-left-color", color, "important");
+      }
+    }
     const status = arg.event.extendedProps.status as string;
     const note = arg.event.extendedProps.note as string | null;
     const doctorName = arg.event.extendedProps.doctorName as string;
@@ -273,7 +334,8 @@ export default function AppointmentCalendarPage() {
     const time = arg.event.start
       ? new Intl.DateTimeFormat("tr-TR", { timeStyle: "short" }).format(arg.event.start)
       : "";
-    arg.el.title = [patientName, doctorName, time, `Durum: ${STATUS_LABEL[status] ?? status}`, note ? `Not: ${note}` : null]
+    const visual = arg.event.extendedProps.visual as ApptVisual;
+    arg.el.title = [patientName, doctorName, time, `Durum: ${APPT_VISUAL_LABEL[visual] ?? STATUS_LABEL[status] ?? status}`, note ? `Not: ${note}` : null]
       .filter(Boolean)
       .join("\n");
   }
@@ -304,7 +366,7 @@ export default function AppointmentCalendarPage() {
   const noDoctors = !doctorOnly && pagedDoctors.length === 0;
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl">
       <div className="mb-3 flex flex-wrap items-center justify-center gap-2 sm:justify-between">
         <Button variant="outline" size="sm" onClick={() => setCloseSlotOpen(true)}>
           <CalendarOff className="size-4" />
@@ -340,6 +402,7 @@ export default function AppointmentCalendarPage() {
 
       <Card>
         <CardContent className="p-2 sm:p-4">
+          <AppointmentLegend className="mb-3 border-b border-border pb-3" />
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="icon" aria-label="Önceki" onClick={goPrev}>
@@ -354,7 +417,7 @@ export default function AppointmentCalendarPage() {
             </div>
             <p className="order-first w-full text-center text-sm font-medium sm:order-0 sm:w-auto sm:flex-1">{title}</p>
             <Select value={viewType} onValueChange={(v) => v && handleViewChange(v)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-36 sm:w-40">
                 <SelectValue>{(value: string) => VIEW_OPTIONS.find((o) => o.value === value)?.label}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -373,17 +436,33 @@ export default function AppointmentCalendarPage() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <div style={doctorOnly ? { minWidth: "35rem" } : { minWidth: `${Math.max(pagedDoctors.length * 11, 35)}rem` }}>
+              <div
+                style={
+                  viewType === "list"
+                    ? undefined
+                    : doctorOnly
+                      ? { minWidth: "35rem" }
+                      : { minWidth: `${Math.max(pagedDoctors.length * 11, 35)}rem` }
+                }
+              >
                 <FullCalendar
                   ref={calendarRef}
                   schedulerLicenseKey={doctorOnly ? undefined : SCHEDULER_LICENSE_KEY}
                   plugins={
                     doctorOnly
-                      ? [dayGridPlugin, timeGridPlugin, interactionPlugin]
-                      : [resourcePlugin, resourceDayGridPlugin, resourceTimeGridPlugin, interactionPlugin]
+                      ? [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]
+                      : [resourcePlugin, resourceDayGridPlugin, resourceTimeGridPlugin, listPlugin, interactionPlugin]
                   }
                   initialView={resolveFcView(viewType, !!doctorOnly)}
-                  resources={doctorOnly ? undefined : pagedDoctors.map((d) => ({ id: d.id, title: d.user.name }))}
+                  resources={doctorOnly ? undefined : pagedDoctors.map((d) => ({ id: d.id, title: d.user.name, extendedProps: { color: d.colorHex } }))}
+                  resourceLabelContent={(arg) => (
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: arg.resource.extendedProps.color as string }} />
+                      <span className="truncate">{arg.resource.title}</span>
+                    </span>
+                  )}
+                  eventDisplay="block"
+                  noEventsContent="Bu gün için randevu yok."
                   headerToolbar={false}
                   locale="tr"
                   firstDay={1}

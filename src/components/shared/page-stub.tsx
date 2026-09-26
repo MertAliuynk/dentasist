@@ -10,7 +10,7 @@ export function PageStub({
   description: string;
 }) {
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center py-24 text-center">
+    <div className="mx-auto w-full flex max-w-lg flex-col items-center py-24 text-center">
       <Icon className="mb-4 size-5 text-muted-foreground" strokeWidth={1.5} />
       <h1 className="text-sm font-medium">{title}</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>

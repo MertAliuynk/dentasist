@@ -29,7 +29,7 @@ export function ConsentFormPrintView({
   template: ConsentTemplate;
 }) {
   return (
-    <div className="mx-auto max-w-3xl rounded-md border border-neutral-300 bg-white p-8 text-neutral-900 shadow-sm print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
+    <div className="mx-auto w-full max-w-3xl rounded-md border border-neutral-300 bg-white p-8 text-neutral-900 shadow-sm print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
       <header className="mb-6 flex items-start justify-between border-b-2 border-neutral-900 pb-3">
         <div>
           <p className="text-lg font-bold">{organizationName}</p>

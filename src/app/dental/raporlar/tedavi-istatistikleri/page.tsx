@@ -35,7 +35,7 @@ export default function TreatmentStatsPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-4xl flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Tedavi İstatistikleri</CardTitle>

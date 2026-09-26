@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { NavItem, NavSection, IconKey, PrimaryAction } from "@/lib/nav/types";
 import { HeaderSearch } from "@/components/shared/header-search";
+import { TenantSupportBell } from "@/components/support/tenant-support-bell";
 
 function searchModuleFor(moduleLabel: string): "dental" | "muhasebe" | "laboratuvar" {
   if (moduleLabel === "Muhasebe") return "muhasebe";
@@ -303,6 +304,8 @@ export function AppShell({
           <div className="min-w-0 flex-1" />
 
           <HeaderSearch module={searchModuleFor(moduleLabel)} />
+
+          <TenantSupportBell base={`/${searchModuleFor(moduleLabel)}`} />
 
           <Button
             variant="ghost"

@@ -18,7 +18,7 @@ export default function LabPaymentsPage() {
   const { data } = trpc.lab.reports.klinikDebt.useQuery();
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-4xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Ödemeler</h1>
         <p className="text-sm text-muted-foreground">Klinik başına toplam borç.</p>

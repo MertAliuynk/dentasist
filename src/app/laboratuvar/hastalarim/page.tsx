@@ -27,7 +27,7 @@ export default function LabPatientsPage() {
   const { data } = trpc.lab.treatment.list.useQuery({ status });
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-6xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Hastalarım</h1>

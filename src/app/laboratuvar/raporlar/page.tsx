@@ -17,7 +17,7 @@ export default function LabReportsPage() {
   const { data: doctors } = trpc.lab.reports.doctorDebt.useQuery({});
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-5xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Raporlar</h1>
         <p className="text-sm text-muted-foreground">Şube ve hekim başına iş ve borç dökümü.</p>

@@ -401,6 +401,8 @@ export const platformOrganizationRouter = platformRouter({
           ...(input.search
             ? {
                 OR: [
+                  { ref: input.search.toUpperCase() },
+                  { ref: input.search },
                   { path: { contains: input.search, mode: "insensitive" as const } },
                   { errorMessage: { contains: input.search, mode: "insensitive" as const } },
                   { userName: { contains: input.search, mode: "insensitive" as const } },
@@ -418,6 +420,54 @@ export const platformOrganizationRouter = platformRouter({
       return { logs, nextCursor };
     }),
 
+  // Global "Hata Kayıtları": failures across every clinic, plus the ones
+  // with no clinic (server render crashes, logged-out pages).
+  errorLog: platformProcedure
+    .use(requirePlatformCapability("platform:org:read"))
+    .input(
+      z.object({
+        search: z.string().trim().max(120).optional(),
+        kind: z.enum(["ALL", "api", "page"]).default("ALL"),
+        hideUserErrors: z.boolean().default(true),
+        cursor: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const s = input.search;
+      const logs = await ctx.db.activityLog.findMany({
+        where: {
+          ok: false,
+          kind: input.kind === "api" ? { in: ["mutation", "query"] } : input.kind === "page" ? { in: ["render", "client"] } : { not: "auth" },
+          // "User errors" = validation / permission / not-found — expected,
+          // not bugs. Hidden by default so real problems stand out.
+          ...(input.hideUserErrors
+            ? { OR: [{ errorCode: null }, { errorCode: { notIn: ["BAD_REQUEST", "FORBIDDEN", "NOT_FOUND", "UNAUTHORIZED", "PRECONDITION_FAILED", "CONFLICT", "TOO_MANY_REQUESTS"] } }] }
+            : {}),
+          ...(s
+            ? {
+                AND: [
+                  {
+                    OR: [
+                      { ref: s.toUpperCase() },
+                      { ref: s },
+                      { path: { contains: s, mode: "insensitive" as const } },
+                      { errorMessage: { contains: s, mode: "insensitive" as const } },
+                      { organization: { name: { contains: s, mode: "insensitive" as const } } },
+                    ],
+                  },
+                ],
+              }
+            : {}),
+        },
+        include: { organization: { select: { id: true, name: true } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 101,
+        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+      });
+      let nextCursor: string | undefined;
+      if (logs.length > 100) nextCursor = logs.pop()!.id;
+      return { logs, nextCursor };
+    }),
   // Platform-team actions taken on this clinic (plan changes, extensions…).
   history: platformProcedure
     .use(requirePlatformCapability("platform:org:read"))

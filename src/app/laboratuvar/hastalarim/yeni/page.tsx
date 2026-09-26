@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,12 +53,12 @@ export default function LabNewPatientPage() {
       toast.success("Hasta ve iş oluşturuldu.");
       router.push(`/laboratuvar/hastalarim/${patient.id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Bir hata oluştu.");
+      toastError(error);
     }
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-2xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Hasta Ekle</h1>
         <p className="text-sm text-muted-foreground">Yeni bir protez işi için hasta ve ilk aşama bilgilerini girin.</p>

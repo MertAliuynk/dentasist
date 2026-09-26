@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { toastError } from "@/lib/error-report";
 import { ScanLine, Upload, Trash2, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ export function PatientXraySection({ patientId }: { patientId: string }) {
       toast.success("Görüntü silindi.");
       utils.patientXray.list.invalidate({ patientId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastError(e),
   });
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {

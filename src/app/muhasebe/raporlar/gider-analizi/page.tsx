@@ -31,7 +31,7 @@ export default function ExpenseAnalysisPage() {
   const total = data?.reduce((s, d) => s + d.total, 0) ?? 0;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto w-full flex max-w-3xl flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Gider Analizi</CardTitle>

@@ -13,7 +13,7 @@ export default function PlatformAuditLogPage() {
   const { data, isLoading } = platformTrpc.auditLog.list.useQuery({ limit: 100 });
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto w-full max-w-4xl">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Denetim Kaydı</CardTitle>

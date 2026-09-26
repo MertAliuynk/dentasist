@@ -259,6 +259,7 @@ export const patientRouter = router({
         birthDate: z.string().optional().nullable(),
         anamnesis: z.string().trim().max(4000).optional().nullable(),
         anamnesisAnswers: z.record(z.string(), z.any()).optional(),
+        smsOptOut: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -278,6 +279,7 @@ export const patientRouter = router({
           tcKimlikNo: input.tcKimlikNo || null,
           birthDate: input.birthDate ? new Date(input.birthDate) : null,
           anamnesis: input.anamnesis || null,
+          ...(input.smsOptOut !== undefined ? { smsOptOut: input.smsOptOut } : {}),
           ...(input.anamnesisAnswers !== undefined
             ? {
                 anamnesisAnswers:

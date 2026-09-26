@@ -29,7 +29,7 @@ export default function MuhasebePatientListPage() {
   const { data, isLoading } = trpc.patient.listForMuhasebe.useQuery({ search });
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto w-full max-w-5xl">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Hastalar</CardTitle>

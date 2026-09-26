@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, requireEntitlement, requireCapability } from "@/server/trpc/trpc";
 import { branchScopeWhere, assertAccessibleBranch } from "@/server/rbac/scope";
 import { logAudit } from "@/server/services/audit";
+import { addDays, trAt, trDay } from "@/lib/tr-time";
 
 async function resolveDoctorId(db: typeof import("@/server/db").db, userId: string) {
   const doctor = await db.doctor.findUnique({ where: { userId } });
@@ -31,6 +32,12 @@ async function assertNotBlocked(
       message: block.reason ? `Bu saat aralığı kapatılmış: ${block.reason}` : "Bu saat aralığı kapatılmış.",
     });
   }
+}
+
+/** Today's bounds in Turkey time — the server runs in UTC, so setHours(0) would be 03:00 TR. */
+function trTodayBounds() {
+  const today = trDay(new Date());
+  return { start: trAt(today, "00:00"), end: new Date(trAt(addDays(today, 1), "00:00").getTime() - 1) };
 }
 
 function isDoctorOnly(roles: string[]) {
@@ -70,64 +77,60 @@ export const appointmentRouter = router({
       });
     }),
 
-  // "Sıradaki Randevu" card — the single next not-yet-handled appointment.
-  // Deliberately excludes ARRIVED: once a patient's been marked arrived
-  // (and optionally had a treatment completed in the same action, see
-  // updateStatus below), the card should move on to the next one rather
-  // than getting stuck showing an already-handled appointment forever.
+  // "Sıradaki Randevu" — for every doctor who still has an unhandled
+  // (SCHEDULED) appointment today, their earliest one plus how many more
+  // are waiting. Doctors with nothing left today don't appear at all.
+  // ARRIVED/NO_SHOW/… are "handled", so a doctor's card moves on to their
+  // next patient as soon as the current one is marked.
   nextUpcoming: protectedProcedure.use(requireEntitlement("DENTAL")).query(async ({ ctx }) => {
     const roles = ctx.session.user.memberships.map((m) => m.role);
     const doctorOnly = isDoctorOnly(roles);
     const scopedDoctorId = doctorOnly ? await resolveDoctorId(ctx.db, ctx.session.user.id) : undefined;
     if (doctorOnly && !scopedDoctorId) return [];
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    return ctx.db.appointment.findMany({
+    const { start, end } = trTodayBounds();
+    const pending = await ctx.db.appointment.findMany({
       where: {
         ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
-        startsAt: { gte: startOfDay, lte: endOfDay },
+        startsAt: { gte: start, lte: end },
         status: "SCHEDULED",
         ...(scopedDoctorId ? { doctorId: scopedDoctorId } : {}),
         patient: { deletedAt: null },
       },
-      include: { patient: true, doctor: { include: { user: true } } },
+      include: { patient: true, doctor: { include: { user: true } }, room: true },
       orderBy: { startsAt: "asc" },
-      take: 1,
     });
+
+    const byDoctor = new Map<string, { appointment: (typeof pending)[number]; remaining: number }>();
+    for (const a of pending) {
+      const cur = byDoctor.get(a.doctorId);
+      if (cur) cur.remaining++;
+      else byDoctor.set(a.doctorId, { appointment: a, remaining: 0 });
+    }
+    return [...byDoctor.values()].map(({ appointment, remaining }) => ({ ...appointment, remainingAfter: remaining }));
   }),
 
-  // "Randevu Takvimim — Bugünün özeti" list widget — every one of today's
-  // appointments, not just the single next one (this used to share
-  // nextUpcoming's take:1 limit for doctor accounts, silently hiding the
-  // other 4+ appointments of the day).
+  // "Randevu Takvimim — Bugünün özeti": every one of today's appointments
+  // (all statuses) with its doctor, so the list shows whose patient it is.
   todaySummary: protectedProcedure.use(requireEntitlement("DENTAL")).query(async ({ ctx }) => {
     const roles = ctx.session.user.memberships.map((m) => m.role);
     const doctorOnly = isDoctorOnly(roles);
     const scopedDoctorId = doctorOnly ? await resolveDoctorId(ctx.db, ctx.session.user.id) : undefined;
     if (doctorOnly && !scopedDoctorId) return [];
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
+    const { start, end } = trTodayBounds();
     return ctx.db.appointment.findMany({
       where: {
         ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
-        startsAt: { gte: startOfDay, lte: endOfDay },
+        startsAt: { gte: start, lte: end },
         ...(scopedDoctorId ? { doctorId: scopedDoctorId } : {}),
         patient: { deletedAt: null },
       },
       include: { patient: true, doctor: { include: { user: true } } },
       orderBy: { startsAt: "asc" },
-      take: 20,
+      take: 200,
     });
   }),
-
   create: protectedProcedure
     .use(requireEntitlement("DENTAL"))
     .use(requireCapability("dental:appointment:write"))
@@ -196,7 +199,7 @@ export const appointmentRouter = router({
       const organizationId = ctx.session.user.organizationId;
       const existing = await ctx.db.appointment.findFirst({
         where: { id: input.id, ...branchScopeWhere(organizationId, ctx.accessibleBranchIds) },
-        select: { doctorId: true, roomId: true, branchId: true, startsAt: true },
+        select: { doctorId: true, roomId: true, branchId: true },
       });
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -230,8 +233,6 @@ export const appointmentRouter = router({
           startsAt: new Date(input.startsAt),
           endsAt: new Date(input.endsAt),
           doctorId: nextDoctorId,
-          // New time → the automatic SMS reminder should go out again for it.
-          ...(existing.startsAt.getTime() !== new Date(input.startsAt).getTime() ? { reminderSentAt: null } : {}),
         },
       });
       if (count === 0) throw new TRPCError({ code: "NOT_FOUND" });
