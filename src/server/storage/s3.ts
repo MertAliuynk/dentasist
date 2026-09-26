@@ -14,12 +14,21 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-let cachedClient: S3Client | null = null;
+const clients = new Map<string, S3Client>();
 
-function getClient(): S3Client {
-  if (cachedClient) return cachedClient;
-  cachedClient = new S3Client({
-    endpoint: requiredEnv("S3_ENDPOINT"),
+/**
+ * `public: true` → a client for *presigning*: the signature covers the host,
+ * and the browser is the one calling that URL, so it must be the publicly
+ * reachable address (S3_PUBLIC_ENDPOINT, e.g. https://s3.example.com) — the
+ * internal docker hostname (http://storage:9000) is unreachable from a
+ * browser. Server-side calls (delete) keep using the internal S3_ENDPOINT.
+ */
+function getClient(opts: { public?: boolean } = {}): S3Client {
+  const endpoint = (opts.public && process.env.S3_PUBLIC_ENDPOINT) || requiredEnv("S3_ENDPOINT");
+  const existing = clients.get(endpoint);
+  if (existing) return existing;
+  const client = new S3Client({
+    endpoint,
     region: process.env.S3_REGION || "us-east-1",
     credentials: {
       accessKeyId: requiredEnv("S3_ACCESS_KEY_ID"),
@@ -29,7 +38,8 @@ function getClient(): S3Client {
     // ("endpoint/bucket/key") is the standard way to point the AWS SDK at it.
     forcePathStyle: true,
   });
-  return cachedClient;
+  clients.set(endpoint, client);
+  return client;
 }
 
 function getBucket(): string {
@@ -40,13 +50,13 @@ const UPLOAD_URL_TTL_SECONDS = 5 * 60;
 const VIEW_URL_TTL_SECONDS = 10 * 60;
 
 export async function createUploadUrl(objectKey: string, contentType: string): Promise<string> {
-  const client = getClient();
+  const client = getClient({ public: true });
   const command = new PutObjectCommand({ Bucket: getBucket(), Key: objectKey, ContentType: contentType });
   return getSignedUrl(client, command, { expiresIn: UPLOAD_URL_TTL_SECONDS });
 }
 
 export async function createViewUrl(objectKey: string, downloadFileName?: string): Promise<string> {
-  const client = getClient();
+  const client = getClient({ public: true });
   const command = new GetObjectCommand({
     Bucket: getBucket(),
     Key: objectKey,
