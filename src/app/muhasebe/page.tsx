@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc/client";
 import { CashEntryDialog } from "@/components/muhasebe/cash-entry-dialog";
 import { hasCapability } from "@/server/rbac/permissions";
 import { CurrencyWidget } from "@/components/shared/currency-widget";
+import { formatCurrency, type Currency } from "@/lib/currency";
 
 function formatDate(dateStr: string) {
   return new Intl.DateTimeFormat("tr-TR", {
@@ -28,12 +29,39 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function EntryLabel({
+  e,
+  title,
+  multiBranch,
+}: {
+  e: { currency: string; foreignAmount: number | null; exchangeRate: unknown; branch: { name: string } };
+  title: string;
+  multiBranch: boolean;
+}) {
+  const foreign = e.currency !== "TRY" && e.foreignAmount != null;
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="truncate">{title}</span>
+      {(foreign || multiBranch) && (
+        <span className="text-xs text-muted-foreground">
+          {foreign && (
+            <>
+              {formatCurrency(e.foreignAmount!, e.currency as Currency)} · kur {Number(e.exchangeRate).toLocaleString("tr-TR")}
+            </>
+          )}
+          {foreign && multiBranch && " · "}
+          {multiBranch && e.branch.name}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function DailyCashRegisterPage() {
   const [date, setDate] = useState(todayIso());
   const [addType, setAddType] = useState<"GELIR" | "GIDER" | null>(null);
 
   const { data: branches } = trpc.branch.list.useQuery();
-  const branchId = branches?.[0]?.id ?? "";
   const { data } = trpc.cashRegister.listByDate.useQuery({ date });
   const { data: me } = trpc.user.me.useQuery();
   const utils = trpc.useUtils();
@@ -95,7 +123,7 @@ export default function DailyCashRegisterPage() {
               <div className="flex flex-col divide-y divide-border">
                 {data.income.map((e) => (
                   <div key={e.id} className="flex items-center justify-between py-2 text-sm">
-                    <span>{e.description || (e.patient ? e.patient.fullName : "Gelir")}</span>
+                    <EntryLabel e={e} title={e.description || (e.patient ? e.patient.fullName : "Gelir")} multiBranch={(branches?.length ?? 0) > 1} />
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{formatMoney(e.amount)}</span>
                       {canDelete && (
@@ -136,7 +164,7 @@ export default function DailyCashRegisterPage() {
               <div className="flex flex-col divide-y divide-border">
                 {data.expense.map((e) => (
                   <div key={e.id} className="flex items-center justify-between py-2 text-sm">
-                    <span>{e.description || e.category?.name || "Gider"}</span>
+                    <EntryLabel e={e} title={e.description || e.category?.name || "Gider"} multiBranch={(branches?.length ?? 0) > 1} />
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{formatMoney(e.amount)}</span>
                       {canDelete && (
@@ -183,13 +211,13 @@ export default function DailyCashRegisterPage() {
 
       <CurrencyWidget />
 
-      {addType && branchId && (
+      {addType && branches && branches.length > 0 && (
         <CashEntryDialog
           open={!!addType}
           onOpenChange={(open) => !open && setAddType(null)}
           type={addType}
           date={date}
-          branchId={branchId}
+          branches={branches}
         />
       )}
     </div>

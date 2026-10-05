@@ -51,6 +51,7 @@ import {
 import type { NavItem, NavSection, IconKey, PrimaryAction } from "@/lib/nav/types";
 import { HeaderSearch } from "@/components/shared/header-search";
 import { TenantSupportBell } from "@/components/support/tenant-support-bell";
+import { NoAccessScreen } from "@/components/shared/error-screen";
 
 function searchModuleFor(moduleLabel: string): "dental" | "muhasebe" | "laboratuvar" {
   if (moduleLabel === "Muhasebe") return "muhasebe";
@@ -98,6 +99,8 @@ type AppShellProps = {
   userName: string;
   roleLabel: string;
   otherModules?: OtherModule[];
+  /** Nav pages this user can't open — rendered as "erişim yok" (see blockedNavHrefs). */
+  blockedHrefs?: string[];
   children: React.ReactNode;
 };
 
@@ -198,9 +201,11 @@ export function AppShell({
   userName,
   roleLabel,
   otherModules,
+  blockedHrefs = [],
   children,
 }: AppShellProps) {
   const pathname = usePathname();
+  const blocked = blockedHrefs.some((h) => pathname === h || pathname.startsWith(`${h}/`));
   const [mobileOpen, setMobileOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const PrimaryIcon = primaryAction ? ICONS[primaryAction.icon] : null;
@@ -318,7 +323,7 @@ export function AppShell({
           </Button>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden bg-background p-4 sm:p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden bg-background p-4 sm:p-6">{blocked ? <NoAccessScreen homeHref={`/${searchModuleFor(moduleLabel)}`} /> : children}</main>
       </div>
     </div>
   );

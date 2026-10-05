@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "@/server/trpc/trpc";
 import { requireCapability } from "@/server/trpc/trpc";
-import { branchScopeWhere } from "@/server/rbac/scope";
+import { branchScopeWhere, branchSelfWhere } from "@/server/rbac/scope";
 
 export const branchRouter = router({
   list: protectedProcedure.query(({ ctx }) => {
     return ctx.db.branch.findMany({
       where: {
-        ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
+        ...branchSelfWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
         deletedAt: null,
       },
       orderBy: { name: "asc" },

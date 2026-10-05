@@ -219,6 +219,7 @@ export const patientRouter = router({
     .input(
       z.object({
         branchId: z.string().min(1),
+        primaryDoctorId: z.string().optional().nullable(),
         patients: z
           .array(
             z.object({
@@ -228,21 +229,45 @@ export const patientRouter = router({
             }),
           )
           .min(1)
-          .max(50),
+          .max(100),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       assertAccessibleBranch(ctx.accessibleBranchIds, input.branchId);
-      const result = await ctx.db.patient.createMany({
-        data: input.patients.map((p) => ({
-          organizationId: ctx.session.user.organizationId,
-          branchId: input.branchId,
-          fullName: p.fullName,
-          phone: p.phone,
-          tcKimlikNo: p.tcKimlikNo || null,
-        })),
-      });
-      return { count: result.count };
+      const organizationId = ctx.session.user.organizationId;
+      if (input.primaryDoctorId) {
+        const doctor = await ctx.db.doctor.findFirst({
+          where: { id: input.primaryDoctorId, organizationId, branchId: input.branchId, deletedAt: null },
+          select: { id: true },
+        });
+        if (!doctor) throw new TRPCError({ code: "BAD_REQUEST", message: "Seçilen hekim bu şubede değil." });
+      }
+
+      // Skip patients already registered with the same TC kimlik no.
+      const tcs = input.patients.map((p) => p.tcKimlikNo).filter((t): t is string => !!t);
+      const existing = tcs.length
+        ? await ctx.db.patient.findMany({
+            where: { organizationId, deletedAt: null, tcKimlikNo: { in: tcs } },
+            select: { tcKimlikNo: true },
+          })
+        : [];
+      const taken = new Set(existing.map((p) => p.tcKimlikNo));
+      const toCreate = input.patients.filter((p) => !p.tcKimlikNo || !taken.has(p.tcKimlikNo));
+      const skipped = input.patients.filter((p) => p.tcKimlikNo && taken.has(p.tcKimlikNo)).map((p) => p.fullName);
+
+      const result = toCreate.length
+        ? await ctx.db.patient.createMany({
+            data: toCreate.map((p) => ({
+              organizationId,
+              branchId: input.branchId,
+              primaryDoctorId: input.primaryDoctorId || null,
+              fullName: p.fullName,
+              phone: p.phone,
+              tcKimlikNo: p.tcKimlikNo || null,
+            })),
+          })
+        : { count: 0 };
+      return { count: result.count, skipped };
     }),
 
   update: protectedProcedure

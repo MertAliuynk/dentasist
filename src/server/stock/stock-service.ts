@@ -18,6 +18,7 @@ export async function receiveStock(
     quantity: number;
     reason: Extract<StockMovementReason, "SATIN_ALMA" | "ACILIS" | "SAYIM">;
     unitCost?: number | null;
+    foreignCost?: { currency: string; unitCost: number; rate: number } | null;
     lotNo?: string | null;
     expiryDate?: Date | null;
     supplierId?: string | null;
@@ -54,6 +55,13 @@ export async function receiveStock(
       reason: args.reason,
       quantity: args.quantity,
       unitCost: args.unitCost ?? null,
+      ...(args.foreignCost
+        ? {
+            costCurrency: args.foreignCost.currency,
+            foreignUnitCost: args.foreignCost.unitCost,
+            exchangeRate: args.foreignCost.rate,
+          }
+        : {}),
       supplierId: args.supplierId || null,
       invoiceNo: args.invoiceNo || null,
       lotNo: args.lotNo || null,

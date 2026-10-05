@@ -43,12 +43,28 @@ function PaymentPlanCreateForm({
   const [notes, setNotes] = useState("");
 
   const utils = trpc.useUtils();
+  const refresh = () => {
+    utils.paymentPlan.listForPatient.invalidate({ patientId });
+    utils.patient.getFinanceSummary.invalidate({ id: patientId });
+    utils.treatment.listUnplanned.invalidate({ patientId });
+  };
+  // Called from the toast after this dialog has closed, so it goes through
+  // the plain client rather than a hook bound to this (unmounted) component.
+  const undo = (planId: string) =>
+    utils.client.paymentPlan.delete
+      .mutate({ planId })
+      .then(() => {
+        toast.success("Ödeme planı geri alındı.");
+        refresh();
+      })
+      .catch((e) => toastError(e));
   const create = trpc.paymentPlan.create.useMutation({
-    onSuccess: () => {
-      toast.success("Ödeme planı oluşturuldu (taslak).");
-      utils.paymentPlan.listForPatient.invalidate({ patientId });
-      utils.patient.getFinanceSummary.invalidate({ id: patientId });
-      utils.treatment.listUnplanned.invalidate({ patientId });
+    onSuccess: (plan) => {
+      toast.success("Ödeme planı oluşturuldu (taslak).", {
+        duration: 10000,
+        action: { label: "Geri Al", onClick: () => undo(plan.id) },
+      });
+      refresh();
       onOpenChange(false);
     },
     onError: (e) => toastError(e),

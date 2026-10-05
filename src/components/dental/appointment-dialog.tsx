@@ -84,12 +84,21 @@ function AppointmentForm({
   const [note, setNote] = useState(appointment?.note ?? "");
   const [status, setStatus] = useState<string>(appointment?.status ?? "SCHEDULED");
   const [roomId, setRoomId] = useState<string>(appointment?.room?.id ?? "");
+  const [completeTreatmentId, setCompleteTreatmentId] = useState("");
 
-  const { data: doctors } = trpc.doctor.list.useQuery(undefined, { enabled: !isEdit });
+  const { data: doctors } = trpc.doctor.bookable.useQuery(undefined, { enabled: !isEdit });
   const { data: rooms } = trpc.room.list.useQuery();
   const { data: patientResults } = trpc.patient.list.useQuery(
     { search: patientSearch, limit: 6 },
     { enabled: !isEdit && patientSearch.trim().length > 0 },
+  );
+
+  // Closing a visit as Tamamlandı requires picking the treatment done in it.
+  const closing = isEdit && (status === "COMPLETED" || status === "ARRIVED") && appointment!.status !== status;
+  const needsTreatment = isEdit && status === "COMPLETED" && appointment!.status !== "COMPLETED";
+  const { data: approvedTreatments } = trpc.treatment.listApprovedForPatient.useQuery(
+    { patientId: appointment?.patient.id ?? "" },
+    { enabled: closing },
   );
 
   const utils = trpc.useUtils();
@@ -116,7 +125,9 @@ function AppointmentForm({
     onError: (e) => toastError(e),
   });
 
-  const selectedDoctor = doctors?.find((d) => d.id === doctorId);
+  // A doctor-only account can only book for themselves — preselect it.
+  const effectiveDoctorId = doctorId || (doctors?.length === 1 ? doctors[0].id : "");
+  const selectedDoctor = doctors?.find((d) => d.id === effectiveDoctorId);
   const activeBranchId = isEdit ? appointment!.doctor.branchId : selectedDoctor?.branchId;
   const branchRooms = rooms?.filter((r) => r.branchId === activeBranchId) ?? [];
 
@@ -181,7 +192,7 @@ function AppointmentForm({
         {!isEdit && (
           <div className="space-y-2">
             <Label>Doktor</Label>
-            <Select value={doctorId} onValueChange={(v) => setDoctorId(v ?? "")}>
+            <Select value={effectiveDoctorId} onValueChange={(v) => setDoctorId(v ?? "")}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Doktor seçin">
                   {(value: string) => doctors?.find((d) => d.id === value)?.user.name}
@@ -259,6 +270,42 @@ function AppointmentForm({
           </div>
         )}
 
+        {closing && (
+          <div className="space-y-2">
+            <Label>
+              Yapılan Tedavi {needsTreatment ? <span className="text-destructive">*</span> : <span className="text-muted-foreground">(opsiyonel)</span>}
+            </Label>
+            {approvedTreatments && approvedTreatments.length === 0 ? (
+              <p className="rounded-md border border-dashed border-input p-2.5 text-xs text-muted-foreground">
+                Hastanın onaylı tedavisi yok.{" "}
+                <Link href={`/dental/hastalar/${appointment!.patient.id}/tedavi-ekle`} className="underline" target="_blank">
+                  Önce tedavi ekleyin
+                </Link>
+                {needsTreatment && ", sonra randevuyu tamamlayın."}
+              </p>
+            ) : (
+              <Select value={completeTreatmentId} onValueChange={(v) => setCompleteTreatmentId(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Bu ziyarette yapılan tedaviyi seçin">
+                    {(value: string) => {
+                      const t = approvedTreatments?.find((x) => x.id === value);
+                      return t ? `${t.name}${t.toothNumber != null ? ` · Diş ${t.toothNumber}` : ""}` : null;
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {approvedTreatments?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                      {t.toothNumber != null ? ` · Diş ${t.toothNumber}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label>Not</Label>
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
@@ -271,21 +318,27 @@ function AppointmentForm({
         </Button>
         {isEdit ? (
           <Button
-            disabled={updateStatus.isPending}
+            disabled={updateStatus.isPending || (needsTreatment && !completeTreatmentId)}
             onClick={() =>
-              updateStatus.mutate({ id: appointment!.id, status: status as never, note, roomId: roomId || null })
+              updateStatus.mutate({
+                id: appointment!.id,
+                status: status as never,
+                note,
+                roomId: roomId || null,
+                completeTreatmentId: closing && completeTreatmentId ? completeTreatmentId : undefined,
+              })
             }
           >
             Kaydet
           </Button>
         ) : (
           <Button
-            disabled={create.isPending || !patientId || !doctorId || !startsAt || !endsAt}
+            disabled={create.isPending || !patientId || !effectiveDoctorId || !startsAt || !endsAt}
             onClick={() => {
-              if (!patientId || !doctorId) return;
+              if (!patientId || !effectiveDoctorId) return;
               create.mutate({
                 patientId,
-                doctorId,
+                doctorId: effectiveDoctorId,
                 branchId: selectedDoctor?.branchId ?? "",
                 roomId: roomId || undefined,
                 startsAt: new Date(startsAt).toISOString(),

@@ -4,6 +4,8 @@ import type { Prisma, PaymentMethod } from "@prisma/client";
 import { router, protectedProcedure, requireEntitlement, requireCapability } from "@/server/trpc/trpc";
 import { branchScopeWhere, assertAccessibleBranch } from "@/server/rbac/scope";
 import { logAudit } from "@/server/services/audit";
+import { patientOutstanding } from "@/server/services/patientDebt";
+import { CURRENCIES } from "@/lib/currency";
 
 function dayRange(dateStr: string) {
   const start = new Date(dateStr);
@@ -116,7 +118,12 @@ export const cashRegisterRouter = router({
           entryDate: { gte: start, lte: end },
           deletedAt: null,
         },
-        include: { category: true, patient: true, doctor: { include: { user: true } } },
+        include: {
+          category: true,
+          patient: true,
+          doctor: { include: { user: true } },
+          branch: { select: { name: true } },
+        },
         orderBy: { createdAt: "desc" },
       });
 
@@ -130,6 +137,19 @@ export const cashRegisterRouter = router({
       }
 
       return { income, expense, byMethod };
+    }),
+
+  patientDebt: protectedProcedure
+    .use(requireEntitlement("MUHASEBE"))
+    .input(z.object({ patientId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const organizationId = ctx.session.user.organizationId;
+      const patient = await ctx.db.patient.findFirst({
+        where: { id: input.patientId, deletedAt: null, ...branchScopeWhere(organizationId, ctx.accessibleBranchIds) },
+        select: { id: true, branch: { select: { name: true } } },
+      });
+      if (!patient) throw new TRPCError({ code: "NOT_FOUND", message: "Hasta bulunamadı." });
+      return { outstanding: await patientOutstanding(ctx.db, organizationId, patient.id), branchName: patient.branch.name };
     }),
 
   create: protectedProcedure
@@ -146,10 +166,18 @@ export const cashRegisterRouter = router({
         patientId: z.string().optional(),
         description: z.string().trim().max(300).optional(),
         entryDate: z.string(),
+        // Döviz girişi: amount stays the TL (kuruş) value; these record the original.
+        currency: z.enum(CURRENCIES).default("TRY"),
+        foreignAmount: z.number().int().min(1).optional(),
+        exchangeRate: z.number().positive().max(100000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       assertAccessibleBranch(ctx.accessibleBranchIds, input.branchId);
+      const foreign = input.currency !== "TRY";
+      if (foreign && (!input.foreignAmount || !input.exchangeRate)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Döviz girişinde tutar ve kur zorunludur." });
+      }
 
       // Server-side enforcement of the Hasta Geliri/Klinik Geliri and Hekim
       // Gideri/Klinik Gideri split — the client UI only offers a doctor
@@ -193,11 +221,32 @@ export const cashRegisterRouter = router({
       if (input.doctorId && !doctor) throw new TRPCError({ code: "NOT_FOUND", message: "Doktor bulunamadı." });
       if (input.patientId && !patient) throw new TRPCError({ code: "NOT_FOUND", message: "Hasta bulunamadı." });
 
+      // Patient income belongs to the patient's own branch, not whichever
+      // branch happened to be preselected in the dialog.
+      const branchId = patient ? patient.branchId : input.branchId;
+
       return ctx.db.$transaction(async (tx) => {
+        if (input.type === "GELIR" && patient) {
+          const owed = await patientOutstanding(tx, organizationId, patient.id);
+          if (input.amount > owed) {
+            const tl = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(owed / 100);
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                owed <= 0
+                  ? "Bu hastanın ödenmemiş borcu yok; hasta geliri eklenemez."
+                  : `Girilen tutar hastanın kalan borcundan (${tl}) fazla.`,
+            });
+          }
+        }
+
         const entry = await tx.cashRegisterEntry.create({
           data: {
             organizationId,
-            branchId: input.branchId,
+            branchId,
+            currency: input.currency,
+            foreignAmount: foreign ? input.foreignAmount : null,
+            exchangeRate: foreign ? input.exchangeRate : null,
             type: input.type,
             method: input.method,
             amount: input.amount,

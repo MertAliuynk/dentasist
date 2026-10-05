@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/server/auth";
 import { AppShell } from "@/components/shared/app-shell";
 import { dentalNav, dentalPrimaryAction } from "@/lib/nav/dental-nav";
-import { filterNavItems } from "@/lib/nav/filter-nav";
+import { blockedNavHrefs, filterNavItems } from "@/lib/nav/filter-nav";
 import { ROLE_LABELS } from "@/lib/nav/role-labels";
 import { resolveBranchLabel } from "@/lib/nav/branch-label";
 import { resolveOtherModules } from "@/lib/nav/other-modules";
@@ -19,6 +19,7 @@ export default async function DentalLayout({ children }: { children: React.React
     <AppShell
       moduleLabel="Dental"
       navItems={navItems}
+      blockedHrefs={blockedNavHrefs(dentalNav, roles, session.user.capabilityOverrides)}
       primaryAction={dentalPrimaryAction}
       organizationName={session.user.organizationName}
       branchLabel={resolveBranchLabel(session.user.memberships)}

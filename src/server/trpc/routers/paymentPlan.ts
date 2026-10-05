@@ -231,6 +231,38 @@ export const paymentPlanRouter = router({
       });
     }),
 
+  // Removes a plan entirely (also used for "Geri Al" right after creating
+  // one). Its treatments go back to "plansız"; payments already applied to
+  // its installments stay in the kasa as unallocated patient income, so the
+  // patient's balance stays correct.
+  delete: protectedProcedure
+    .use(requireEntitlement("MUHASEBE"))
+    .use(requireCapability("muhasebe:paymentplan:write"))
+    .input(z.object({ planId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.user.organizationId;
+      const plan = await ctx.db.paymentPlan.findFirst({
+        where: { id: input.planId, ...branchScopeWhere(organizationId, ctx.accessibleBranchIds) },
+        include: { installments: { select: { paidAmount: true } } },
+      });
+      if (!plan) throw new TRPCError({ code: "NOT_FOUND", message: "Ödeme planı bulunamadı." });
+      const paid = plan.installments.reduce((s, i) => s + i.paidAmount, 0);
+
+      await ctx.db.$transaction([
+        ctx.db.treatment.updateMany({ where: { paymentPlanId: plan.id, organizationId }, data: { paymentPlanId: null } }),
+        // Installments and their allocations cascade.
+        ctx.db.paymentPlan.delete({ where: { id: plan.id } }),
+      ]);
+
+      await logAudit(ctx.db, organizationId, ctx.session.user.id, "payment_plan.deleted", "PaymentPlan", plan.id, {
+        status: plan.status,
+        totalAmount: plan.totalAmount,
+        paidAmount: paid,
+        patientId: plan.patientId,
+      });
+      return { success: true, paidAmount: paid };
+    }),
+
   activate: protectedProcedure
     .use(requireEntitlement("MUHASEBE"))
     .use(requireCapability("muhasebe:paymentplan:activate"))

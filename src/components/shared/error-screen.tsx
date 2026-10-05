@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, Copy, FileQuestion, Home, LifeBuoy, RotateCcw } from "lucide-react";
+import { AlertTriangle, Copy, FileQuestion, Home, LifeBuoy, Lock, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supportLink } from "@/lib/error-report";
 
@@ -86,6 +86,25 @@ export function ErrorScreen({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+export function NoAccessScreen({ homeHref = "/" }: { homeHref?: string }) {
+  return (
+    <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-4 py-16 text-center">
+      <span className="flex size-14 items-center justify-center rounded-full bg-muted">
+        <Lock className="size-7 text-muted-foreground" />
+      </span>
+      <div className="space-y-1.5">
+        <h1 className="text-xl font-semibold">Bu sayfaya erişim yetkiniz yok</h1>
+        <p className="text-sm text-muted-foreground">
+          Bu bölüm hesabınızın rolüne açık değil. Erişmeniz gerekiyorsa klinik yöneticinizden yetki isteyebilirsiniz.
+        </p>
+      </div>
+      <Button nativeButton={false} render={<Link href={homeHref} />}>
+        <Home className="size-4" /> Ana Sayfaya Dön
+      </Button>
     </div>
   );
 }

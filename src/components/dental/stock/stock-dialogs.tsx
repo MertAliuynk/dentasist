@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc/client";
+import { MoneyInput, emptyMoney, moneyResult, type MoneyValue } from "@/components/shared/money-input";
 import { ExpiryBadge, REASON_META, fmtDate, moneyInput, parseMoney, toDateInput, type Reason } from "@/components/dental/stock/stock-utils";
 
 export type ProductLite = {
@@ -249,7 +250,7 @@ function ReceiveBody({ product, onClose }: { product: ProductLite; onClose: () =
   const invalidate = useInvalidateStock();
   const { data: suppliers } = trpc.stock.supplier.list.useQuery();
   const [qty, setQty] = useState("");
-  const [cost, setCost] = useState(moneyInput(product.unitPrice));
+  const [cost, setCost] = useState<MoneyValue>(emptyMoney(moneyInput(product.unitPrice)));
   const [lot, setLot] = useState("");
   const [expiry, setExpiry] = useState("");
   const [supplierId, setSupplierId] = useState<string | null>(product.supplierId);
@@ -264,7 +265,12 @@ function ReceiveBody({ product, onClose }: { product: ProductLite; onClose: () =
     onError: (e) => toastError(e),
   });
   const n = Number(qty) || 0;
-  const unitCost = parseMoney(cost);
+  const costResult = moneyResult(cost);
+  const unitCost = costResult.tlKurus;
+  const foreignCost =
+    costResult.currency !== "TRY" && costResult.foreignAmount != null && costResult.exchangeRate
+      ? { currency: costResult.currency, unitCost: costResult.foreignAmount, rate: costResult.exchangeRate }
+      : null;
 
   return (
     <>
@@ -280,9 +286,9 @@ function ReceiveBody({ product, onClose }: { product: ProductLite; onClose: () =
             <Label>Gelen Miktar ({product.unit}) *</Label>
             <Input type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
           </div>
-          <div className="space-y-1.5">
-            <Label>Birim Alış Fiyatı (₺)</Label>
-            <Input inputMode="decimal" placeholder="0,00" value={cost} onChange={(e) => setCost(e.target.value)} />
+          <div className="space-y-1.5 sm:row-span-2">
+            <Label>Birim Alış Fiyatı</Label>
+            <MoneyInput value={cost} onChange={setCost} side="selling" />
           </div>
           <div className="space-y-1.5">
             <Label>Son Kullanma Tarihi</Label>
@@ -320,6 +326,7 @@ function ReceiveBody({ product, onClose }: { product: ProductLite; onClose: () =
               productId: product.id,
               quantity: n,
               unitCost,
+              foreignCost: foreignCost as { currency: "USD" | "EUR" | "GBP"; unitCost: number; rate: number } | null,
               lotNo: lot || null,
               expiryDate: expiry || null,
               supplierId,

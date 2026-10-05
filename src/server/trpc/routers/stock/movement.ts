@@ -84,6 +84,15 @@ export const stockMovementRouter = router({
         productId: z.string(),
         quantity: z.number().int().min(1, "Miktar en az 1 olmalı."),
         unitCost: z.number().int().min(0).optional().nullable(),
+        // Döviz ile alış; unitCost then holds the TL equivalent.
+        foreignCost: z
+          .object({
+            currency: z.enum(["USD", "EUR", "GBP"]),
+            unitCost: z.number().int().min(0),
+            rate: z.number().positive().max(100000),
+          })
+          .optional()
+          .nullable(),
         lotNo: z.string().trim().max(60).optional().nullable(),
         expiryDate: z.string().optional().nullable(),
         supplierId: z.string().optional().nullable(),
@@ -106,6 +115,7 @@ export const stockMovementRouter = router({
           quantity: input.quantity,
           reason: "SATIN_ALMA",
           unitCost: input.unitCost,
+          foreignCost: input.foreignCost,
           lotNo: input.lotNo,
           expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
           supplierId: input.supplierId,

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/server/auth";
 import { AppShell } from "@/components/shared/app-shell";
 import { labNav, labPrimaryAction } from "@/lib/nav/lab-nav";
-import { filterNavItems } from "@/lib/nav/filter-nav";
+import { blockedNavHrefs, filterNavItems } from "@/lib/nav/filter-nav";
 import { ROLE_LABELS } from "@/lib/nav/role-labels";
 import { resolveBranchLabel } from "@/lib/nav/branch-label";
 import { resolveOtherModules } from "@/lib/nav/other-modules";
@@ -19,6 +19,7 @@ export default async function LaboratuvarLayout({ children }: { children: React.
     <AppShell
       moduleLabel="Laboratuvar"
       navItems={navItems}
+      blockedHrefs={blockedNavHrefs(labNav, roles, session.user.capabilityOverrides)}
       primaryAction={roles.includes("DOKTOR") || roles.includes("PATRON") ? labPrimaryAction : undefined}
       organizationName={session.user.organizationName}
       branchLabel={resolveBranchLabel(session.user.memberships)}

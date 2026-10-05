@@ -16,11 +16,39 @@ export const doctorRouter = router({
       return { success: true };
     }),
 
+  updateCommission: protectedProcedure
+    .use(requireCapability("org:user:manage"))
+    .input(z.object({ id: z.string(), commissionRate: z.number().min(0).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const { count } = await ctx.db.doctor.updateMany({
+        where: { id: input.id, organizationId: ctx.session.user.organizationId, deletedAt: null },
+        data: { commissionRate: input.commissionRate },
+      });
+      if (count === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Hekim bulunamadı." });
+      return { success: true };
+    }),
+
   list: protectedProcedure.query(({ ctx }) => {
     return ctx.db.doctor.findMany({
       where: {
         ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
         deletedAt: null,
+      },
+      include: { user: true, branch: true },
+      orderBy: { user: { name: "asc" } },
+    });
+  }),
+
+  // Doctors the caller may book appointments for: a doctor-only account
+  // gets just themselves (matches the server-side rule in appointment.create).
+  bookable: protectedProcedure.query(async ({ ctx }) => {
+    const roles = new Set(ctx.session.user.memberships.map((m) => m.role));
+    const doctorOnly = roles.size === 1 && roles.has("DOKTOR");
+    return ctx.db.doctor.findMany({
+      where: {
+        ...branchScopeWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds),
+        deletedAt: null,
+        ...(doctorOnly ? { userId: ctx.session.user.id } : {}),
       },
       include: { user: true, branch: true },
       orderBy: { user: { name: "asc" } },
@@ -94,6 +122,8 @@ export const doctorRouter = router({
               status: "COMPLETED",
               completedAt: range,
             },
+            include: { patient: { select: { fullName: true } } },
+            orderBy: { completedAt: "desc" },
           }),
           ctx.db.installment.findMany({
             where: {
@@ -115,17 +145,34 @@ export const doctorRouter = router({
       const totalExpense = expenseEntries.reduce((s, e) => s + e.amount, 0);
       const treatmentRevenue = completedTreatments.reduce((s, t) => s + (t.price ?? 0), 0);
       const commissionRate = Number(doctor.commissionRate);
-      const earnings = Math.round((treatmentRevenue * commissionRate) / 100);
+      // Two common ways clinics pay doctors; the page lets the user pick:
+      //  - tahsilat: (collected from the doctor's patients − doctor expenses) × rate
+      //  - tedavi:   price of treatments completed in the range × rate
+      const collectionBase = Math.max(0, totalIncome - totalExpense);
+      const earningsByCollection = Math.round((collectionBase * commissionRate) / 100);
+      const earningsByTreatment = Math.round((treatmentRevenue * commissionRate) / 100);
       const pendingAmount = pendingInstallments.reduce((s, i) => s + (i.amount - i.paidAmount), 0);
 
       return {
         doctor,
+        commissionRate,
         totalIncome,
         totalExpense,
-        earnings,
+        collectionBase,
+        treatmentRevenue,
+        earningsByCollection,
+        earningsByTreatment,
         pendingAmount,
         incomeEntries,
         expenseEntries,
+        completedTreatments: completedTreatments.map((t) => ({
+          id: t.id,
+          name: t.name,
+          toothNumber: t.toothNumber,
+          price: t.price ?? 0,
+          completedAt: t.completedAt,
+          patientName: t.patient.fullName,
+        })),
       };
     }),
 });

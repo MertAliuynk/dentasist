@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 
 function formatMoney(kurus: number) {
@@ -177,8 +178,20 @@ export function PaymentPlanCard({ plan }: { plan: Plan }) {
     onError: (e) => toastError(e),
   });
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const remove = trpc.paymentPlan.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Ödeme planı silindi.");
+      utils.paymentPlan.listForPatient.invalidate({ patientId: plan.patientId });
+      utils.patient.getFinanceSummary.invalidate({ id: plan.patientId });
+      utils.treatment.listUnplanned.invalidate({ patientId: plan.patientId });
+    },
+    onError: (e) => toastError(e),
+  });
+
   const sum = plan.installments.reduce((s, i) => s + i.amount, 0);
   const balanced = sum === plan.totalAmount;
+  const paid = plan.installments.reduce((s, i) => s + i.paidAmount, 0);
 
   return (
     <Card>
@@ -222,8 +235,41 @@ export function PaymentPlanCard({ plan }: { plan: Plan }) {
             </Button>
           </div>
         )}
+        {!confirmDelete && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:ml-0"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 className="size-4" /> Planı Sil
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
+        {confirmDelete && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
+            <span className="flex-1">
+              Bu ödeme planı silinsin mi?
+              {paid > 0 && (
+                <span className="block text-xs text-muted-foreground">
+                  Plana işlenmiş {formatMoney(paid)} ödeme silinmez; kasada hastanın ödemesi olarak kalır.
+                </span>
+              )}
+            </span>
+            <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>
+              Vazgeç
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate({ planId: plan.id })}
+            >
+              Evet, Sil
+            </Button>
+          </div>
+        )}
         {!balanced && plan.status === "DRAFT" && (
           <p className="mb-2 text-xs text-destructive">
             Taksit toplamı ({formatMoney(sum)}) plan tutarına eşit değil.

@@ -49,6 +49,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.16 0 0);
   --card: oklch(1 0 0);
@@ -84,6 +85,8 @@
 }
 
 .dark {
+  /* Native controls (select dropdowns, date pickers, scrollbars) follow the theme. */
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.96 0 0);
   --card: oklch(0.19 0 0);
@@ -263,3 +266,23 @@
 .fc .fc-event.appt-postponed { background: var(--background) !important; border: 1.5px dashed var(--appt-color) !important; }
 .fc .fc-event.appt-canceled { background: var(--background) !important; border: 1px solid var(--border) !important; }
 .fc .fc-list-event.appt { background: transparent !important; border: 0 !important; }
+
+/* FullCalendar on the app's theme tokens — its defaults are hard-coded
+ * light colours (white sticky headers, yellow "today"), unreadable in dark. */
+.fc {
+  --fc-page-bg-color: var(--background);
+  --fc-neutral-bg-color: var(--muted);
+  --fc-neutral-text-color: var(--muted-foreground);
+  --fc-border-color: var(--border);
+  --fc-today-bg-color: color-mix(in srgb, var(--primary) 7%, transparent);
+  --fc-list-event-hover-bg-color: var(--accent);
+  --fc-highlight-color: color-mix(in srgb, var(--primary) 12%, transparent);
+  --fc-non-business-color: color-mix(in srgb, var(--muted) 50%, transparent);
+  color: var(--foreground);
+}
+.fc .fc-col-header-cell,
+.fc .fc-resource-cell,
+.fc .fc-list-day-cushion {
+  background: var(--muted);
+  color: var(--foreground);
+}

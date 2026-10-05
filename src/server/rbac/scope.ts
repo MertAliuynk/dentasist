@@ -26,6 +26,18 @@ export function branchScopeWhere(organizationId: string, accessible: AccessibleB
 }
 
 /**
+ * Same scoping for the Branch table itself, whose own key is `id` (it has no
+ * `branchId` column — using branchScopeWhere on it crashes for every
+ * branch-bound role: doctors, secretaries, branch managers).
+ */
+export function branchSelfWhere(organizationId: string, accessible: AccessibleBranches) {
+  return {
+    organizationId,
+    ...(accessible === "ALL" ? {} : { id: { in: accessible } }),
+  };
+}
+
+/**
  * Throws FORBIDDEN if the caller does not have access to the given branchId.
  * Use this whenever a mutation accepts a client-supplied branchId, so a
  * branch-restricted role (SUBE_YONETICISI etc.) cannot write into a branch

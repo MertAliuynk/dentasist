@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure, requireEntitlement, requireCapability } from "@/server/trpc/trpc";
-import { branchScopeWhere } from "@/server/rbac/scope";
+import { branchScopeWhere, branchSelfWhere } from "@/server/rbac/scope";
 
 export const reportsDentalRouter = router({
   summary: protectedProcedure
@@ -113,7 +113,7 @@ export const reportsDentalRouter = router({
         }),
       ]);
 
-      const branches = await ctx.db.branch.findMany({ where: scope, select: { id: true, name: true } });
+      const branches = await ctx.db.branch.findMany({ where: branchSelfWhere(ctx.session.user.organizationId, ctx.accessibleBranchIds), select: { id: true, name: true } });
       const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
 
       return {

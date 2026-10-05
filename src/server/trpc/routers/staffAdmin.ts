@@ -35,11 +35,11 @@ export const staffAdminRouter = router({
               where: { branchId: branch.id, startsAt: { gte: startOfToday, lte: endOfToday } },
             }),
             ctx.db.cashRegisterEntry.aggregate({
-              where: { branchId: branch.id, type: "GELIR", entryDate: { gte: startOfMonth } },
+              where: { branchId: branch.id, type: "GELIR", entryDate: { gte: startOfMonth }, deletedAt: null },
               _sum: { amount: true },
             }),
             ctx.db.cashRegisterEntry.aggregate({
-              where: { branchId: branch.id, type: "GIDER", entryDate: { gte: startOfMonth } },
+              where: { branchId: branch.id, type: "GIDER", entryDate: { gte: startOfMonth }, deletedAt: null },
               _sum: { amount: true },
             }),
           ]);

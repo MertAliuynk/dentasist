@@ -235,7 +235,10 @@ export default function DentalHomePage() {
                       className={`appt appt-${v} flex items-center gap-3 px-3 py-2 text-sm transition-opacity hover:opacity-90`}
                       style={{ "--appt-color": a.doctor.colorHex } as React.CSSProperties}
                     >
-                      <span className="w-11 shrink-0 font-mono text-sm font-semibold tabular-nums">{formatTime(a.startsAt)}</span>
+                      <span className="flex w-12 shrink-0 flex-col font-mono leading-tight tabular-nums">
+                        <span className="text-sm font-semibold">{formatTime(a.startsAt)}</span>
+                        <span className="text-[11px] opacity-70">{formatTime(a.endsAt)}</span>
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="appt-title block truncate font-medium">{a.patient.fullName}</span>
                         <span className="flex items-center gap-1.5 text-xs opacity-80">

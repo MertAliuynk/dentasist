@@ -40,6 +40,19 @@ function trTodayBounds() {
   return { start: trAt(today, "00:00"), end: new Date(trAt(addDays(today, 1), "00:00").getTime() - 1) };
 }
 
+/**
+ * A user whose only role is DOKTOR works on their own calendar only: they
+ * can't book, move or mark appointments for other doctors. Returns their
+ * Doctor id in that case (throws if they have no doctor profile), or null
+ * for roles that manage everyone's calendar (secretary, manager, patron).
+ */
+async function ownDoctorScope(ctx: { db: typeof import("@/server/db").db; session: { user: { id: string; memberships: { role: string }[] } } }) {
+  if (!isDoctorOnly(ctx.session.user.memberships.map((m) => m.role))) return null;
+  const id = await resolveDoctorId(ctx.db, ctx.session.user.id);
+  if (!id) throw new TRPCError({ code: "FORBIDDEN", message: "Hesabınıza bağlı bir hekim profili bulunamadı." });
+  return id;
+}
+
 function isDoctorOnly(roles: string[]) {
   const set = new Set(roles);
   return set.size === 1 && set.has("DOKTOR");
@@ -147,6 +160,10 @@ export const appointmentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAccessibleBranch(ctx.accessibleBranchIds, input.branchId);
+      const ownDoctorId = await ownDoctorScope(ctx);
+      if (ownDoctorId && input.doctorId !== ownDoctorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Yalnızca kendi takviminize randevu ekleyebilirsiniz." });
+      }
 
       const [patient, doctor, room] = await Promise.all([
         ctx.db.patient.findFirst({
@@ -202,6 +219,10 @@ export const appointmentRouter = router({
         select: { doctorId: true, roomId: true, branchId: true },
       });
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      const ownDoctorId = await ownDoctorScope(ctx);
+      if (ownDoctorId && (existing.doctorId !== ownDoctorId || (input.doctorId && input.doctorId !== ownDoctorId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Yalnızca kendi randevularınızı taşıyabilirsiniz; başka hekime aktaramazsınız." });
+      }
 
       // Dragging an appointment onto a different doctor's column/row
       // reassigns it — only within the same branch the appointment (and the
@@ -259,9 +280,22 @@ export const appointmentRouter = router({
       const organizationId = ctx.session.user.organizationId;
       const appointment = await ctx.db.appointment.findFirst({
         where: { id: input.id, ...branchScopeWhere(organizationId, ctx.accessibleBranchIds) },
-        select: { branchId: true, patientId: true },
+        select: { branchId: true, patientId: true, doctorId: true, status: true },
       });
       if (!appointment) throw new TRPCError({ code: "NOT_FOUND" });
+      const ownDoctorId = await ownDoctorScope(ctx);
+      if (ownDoctorId && appointment.doctorId !== ownDoctorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Yalnızca kendi randevularınızı güncelleyebilirsiniz." });
+      }
+      // A visit can only be closed as "Tamamlandı" together with the
+      // treatment that was done in it (it feeds billing and the doctor's
+      // hakediş — a completed visit with no treatment leaves both empty).
+      if (input.status === "COMPLETED" && appointment.status !== "COMPLETED" && !input.completeTreatmentId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Randevuyu 'Tamamlandı' yapmak için bu ziyarette yapılan tedaviyi seçmelisiniz.",
+        });
+      }
 
       if (input.roomId) {
         const room = await ctx.db.room.findFirst({
@@ -272,8 +306,8 @@ export const appointmentRouter = router({
 
       let treatment: { id: string } | null = null;
       if (input.completeTreatmentId) {
-        if (input.status !== "ARRIVED") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Tedavi tamamlama yalnızca 'Geldi' durumuyla birlikte yapılabilir." });
+        if (input.status !== "ARRIVED" && input.status !== "COMPLETED") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Tedavi tamamlama yalnızca 'Geldi' veya 'Tamamlandı' durumuyla birlikte yapılabilir." });
         }
         treatment = await ctx.db.treatment.findFirst({
           where: {

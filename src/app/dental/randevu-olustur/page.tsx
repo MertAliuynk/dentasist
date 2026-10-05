@@ -36,14 +36,16 @@ export default function CreateAppointmentPage() {
   const [endsAt, setEndsAt] = useState(() => toLocalInputValue(new Date(Date.now() + 90 * 60 * 1000)));
   const [note, setNote] = useState("");
 
-  const { data: doctors } = trpc.doctor.list.useQuery();
+  const { data: doctors } = trpc.doctor.bookable.useQuery();
   const { data: rooms } = trpc.room.list.useQuery();
   const { data: patientResults } = trpc.patient.list.useQuery(
     { search: patientSearch, limit: 6 },
     { enabled: patientSearch.trim().length > 0 },
   );
 
-  const selectedDoctor = doctors?.find((d) => d.id === doctorId);
+  // A doctor-only account can only book for themselves — preselect it.
+  const effectiveDoctorId = doctorId || (doctors?.length === 1 ? doctors[0].id : "");
+  const selectedDoctor = doctors?.find((d) => d.id === effectiveDoctorId);
   const branchRooms = rooms?.filter((r) => r.branchId === selectedDoctor?.branchId) ?? [];
 
   const create = trpc.appointment.create.useMutation({
@@ -98,7 +100,7 @@ export default function CreateAppointmentPage() {
 
           <div className="space-y-2">
             <Label>Doktor</Label>
-            <Select value={doctorId} onValueChange={(v) => setDoctorId(v ?? "")}>
+            <Select value={effectiveDoctorId} onValueChange={(v) => setDoctorId(v ?? "")}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Doktor seçin">
                   {(value: string) => doctors?.find((d) => d.id === value)?.user.name}
@@ -152,12 +154,12 @@ export default function CreateAppointmentPage() {
 
           <Button
             className="w-full"
-            disabled={!patientId || !doctorId || create.isPending}
+            disabled={!patientId || !effectiveDoctorId || create.isPending}
             onClick={() => {
               if (!patientId || !selectedDoctor) return;
               create.mutate({
                 patientId,
-                doctorId,
+                doctorId: effectiveDoctorId,
                 branchId: selectedDoctor.branchId,
                 roomId: roomId || undefined,
                 startsAt: new Date(startsAt).toISOString(),

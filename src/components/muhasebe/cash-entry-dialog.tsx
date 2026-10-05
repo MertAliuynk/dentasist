@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc/client";
+import { MoneyInput, emptyMoney, moneyResult, type MoneyValue } from "@/components/shared/money-input";
+import { decimalInput, formatCurrency } from "@/lib/currency";
 
 const METHOD_OPTIONS = [
   { value: "NAKIT", label: "Nakit" },
@@ -46,18 +48,19 @@ export function CashEntryDialog({
   onOpenChange,
   type,
   date,
-  branchId,
+  branches,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   type: "GELIR" | "GIDER";
   date: string;
-  branchId: string;
+  branches: { id: string; name: string }[];
 }) {
   const [kind, setKind] = useState<IncomeKind | ExpenseKind>(type === "GELIR" ? "HASTA" : "HEKIM");
   const [entryDate, setEntryDate] = useState(date);
   const [method, setMethod] = useState<string>("NAKIT");
-  const [amount, setAmount] = useState("");
+  const [money, setMoney] = useState<MoneyValue>(emptyMoney());
+  const [pickedBranchId, setPickedBranchId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [patientSearch, setPatientSearch] = useState("");
@@ -70,6 +73,17 @@ export function CashEntryDialog({
 
   const { data: categories } = trpc.expenseCategory.list.useQuery(undefined, { enabled: type === "GIDER" });
   const { data: doctors } = trpc.doctor.list.useQuery(undefined, { enabled: isDoctorExpense });
+  const { data: debt } = trpc.cashRegister.patientDebt.useQuery(
+    { patientId: patientId ?? "" },
+    { enabled: isPatientIncome && !!patientId },
+  );
+  const result = moneyResult(money);
+  const amountKurus = result.tlKurus ?? 0;
+  const overDebt = isPatientIncome && !!debt && amountKurus > debt.outstanding;
+  // Patient income is booked on the patient's branch (server enforces it);
+  // other entries go to the picked branch, or the only one.
+  const branchId = pickedBranchId || (branches.length === 1 ? branches[0].id : "");
+  const needsBranch = !isPatientIncome && branches.length > 1;
   const { data: patientResults } = trpc.patient.list.useQuery(
     { search: patientSearch, limit: 6 },
     { enabled: isPatientIncome && patientSearch.trim().length > 0 },
@@ -80,8 +94,10 @@ export function CashEntryDialog({
     onSuccess: () => {
       toast.success(type === "GELIR" ? "Gelir eklendi." : "Gider eklendi.");
       utils.cashRegister.listByDate.invalidate();
+      utils.cashRegister.patientDebt.invalidate();
+      utils.paymentPlan.listForPatient.invalidate();
       onOpenChange(false);
-      setAmount("");
+      setMoney(emptyMoney());
       setDescription("");
       setCategoryId("");
       setDoctorId("");
@@ -126,11 +142,35 @@ export function CashEntryDialog({
               <div className="space-y-2">
                 <Label>Hasta</Label>
                 {patientId ? (
-                  <div className="flex items-center justify-between rounded-md border border-input px-3 py-2 text-sm">
-                    <span>{patientLabel}</span>
-                    <Button variant="ghost" size="sm" onClick={() => setPatientId(null)}>
-                      Değiştir
-                    </Button>
+                  <div className="rounded-md border border-input px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{patientLabel}</span>
+                      <Button variant="ghost" size="sm" onClick={() => setPatientId(null)}>
+                        Değiştir
+                      </Button>
+                    </div>
+                    {debt ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>
+                          Kalan borç:{" "}
+                          <b className={debt.outstanding > 0 ? "text-foreground" : "text-emerald-600 dark:text-emerald-400"}>
+                            {formatCurrency(debt.outstanding)}
+                          </b>
+                        </span>
+                        <span>Şube: {debt.branchName}</span>
+                        {debt.outstanding > 0 && (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={() => setMoney(emptyMoney(decimalInput(debt.outstanding / 100)))}
+                          >
+                            Tamamını gir
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-muted-foreground">Borç bilgisi yükleniyor…</p>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -226,9 +266,36 @@ export function CashEntryDialog({
               </div>
             )}
 
+            {needsBranch && (
+              <div className="space-y-2">
+                <Label>Şube</Label>
+                <Select value={pickedBranchId} onValueChange={(v) => setPickedBranchId(v ?? "")}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Şube seçin">
+                      {(value: string) => branches.find((b) => b.id === value)?.name}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label>Miktar (₺)</Label>
-              <Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <Label>Tutar</Label>
+              <MoneyInput value={money} onChange={setMoney} side={type === "GELIR" ? "buying" : "selling"} />
+              {overDebt && (
+                <p className="text-xs text-destructive">
+                  {debt!.outstanding > 0
+                    ? `Tutar hastanın kalan borcundan (${formatCurrency(debt!.outstanding)}) fazla olamaz.`
+                    : "Bu hastanın ödenmemiş borcu yok."}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -248,8 +315,10 @@ export function CashEntryDialog({
           </Button>
           <Button
             disabled={
-              !amount ||
-              Number(amount) <= 0 ||
+              amountKurus <= 0 ||
+              overDebt ||
+              (needsBranch && !branchId) ||
+              (money.currency !== "TRY" && (!result.foreignAmount || !result.exchangeRate)) ||
               (isPatientIncome && !patientId) ||
               (isDoctorExpense && !doctorId) ||
               (type === "GIDER" && !categoryId) ||
@@ -257,10 +326,13 @@ export function CashEntryDialog({
             }
             onClick={() =>
               create.mutate({
-                branchId,
+                branchId: branchId || branches[0].id,
                 type,
                 method: method as "NAKIT" | "HAVALE" | "KREDI_KARTI",
-                amount: Math.round(Number(amount) * 100),
+                amount: amountKurus,
+                currency: result.currency,
+                foreignAmount: result.foreignAmount,
+                exchangeRate: result.exchangeRate,
                 categoryId: categoryId || undefined,
                 doctorId: isDoctorExpense ? doctorId || undefined : undefined,
                 patientId: isPatientIncome ? patientId ?? undefined : undefined,
