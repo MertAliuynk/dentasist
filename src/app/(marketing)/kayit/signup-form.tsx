@@ -8,6 +8,7 @@ import { toastError } from "@/lib/error-report";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc/client";
 import { Mascot } from "@/components/marketing/mascot";
@@ -73,23 +74,20 @@ function SignUpForm() {
           >
             <div className="space-y-2">
               <Label htmlFor="plan">Plan</Label>
-              <select
-                id="plan"
-                className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                value={planCode}
-                onChange={(e) => setPlanCode(e.target.value)}
-                disabled={plansLoading}
-                required
-              >
-                <option value="" disabled>
-                  {plansLoading ? "Yükleniyor…" : "Plan seçin"}
-                </option>
-                {plans?.map((plan) => (
-                  <option key={plan.code} value={plan.code}>
-                    {plan.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={planCode} onValueChange={(v) => setPlanCode(v ?? "")} disabled={plansLoading}>
+                <SelectTrigger id="plan" className="w-full">
+                  <SelectValue placeholder={plansLoading ? "Yükleniyor…" : "Plan seçin"}>
+                    {(value: string) => plans?.find((p) => p.code === value)?.name}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {plans?.map((plan) => (
+                    <SelectItem key={plan.code} value={plan.code}>
+                      {plan.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
