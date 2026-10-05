@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { auth as tenantAuth } from "@/server/auth-edge";
 import { auth as platformAuth } from "@/server/platform-auth-edge";
 import { isSubscriptionUsable } from "@/lib/subscription-access";
+import { contentSecurityPolicy } from "@/server/security/csp";
 import type { ModuleKey } from "@prisma/client";
 
 const MODULE_BY_PREFIX: Record<string, ModuleKey> = {
@@ -55,13 +56,21 @@ const platformMiddleware = platformAuth((req) => {
   return NextResponse.next();
 });
 
-export default function proxy(req: NextRequest, event: Parameters<typeof tenantMiddleware>[1]) {
-  if (req.nextUrl.pathname.startsWith("/admin")) {
-    return platformMiddleware(req, event);
-  }
-  return tenantMiddleware(req, event);
+const PROTECTED = /^\/(dental|muhasebe|laboratuvar|admin)(\/|$)/;
+
+export default async function proxy(req: NextRequest, event: Parameters<typeof tenantMiddleware>[1]) {
+  const { pathname } = req.nextUrl;
+  // Auth only runs for app sections; every other page just gets the CSP.
+  const res = !PROTECTED.test(pathname)
+    ? NextResponse.next()
+    : ((pathname.startsWith("/admin") ? await platformMiddleware(req, event) : await tenantMiddleware(req, event)) ??
+      NextResponse.next());
+  res.headers.set("Content-Security-Policy", contentSecurityPolicy());
+  return res;
 }
 
 export const config = {
-  matcher: ["/dental/:path*", "/muhasebe/:path*", "/laboratuvar/:path*", "/admin/:path*"],
+  // Pages only — API routes return JSON (CSP is meaningless there) and are
+  // left untouched; static assets and images are skipped too.
+  matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|svg|ico|webp|gif|woff2?)$).*)"],
 };

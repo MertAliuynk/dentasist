@@ -5,7 +5,10 @@
 // Set SMS_REMINDER_WORKER=off to disable (e.g. on a secondary instance).
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // Same switch as the SMS worker: background jobs run on one instance only.
   if (process.env.SMS_REMINDER_WORKER === "off") return;
+  const { startMaintenance } = await import("@/server/maintenance");
+  startMaintenance();
   const { startAutomationWorker } = await import("@/server/sms/automations");
   startAutomationWorker();
 }

@@ -67,7 +67,7 @@ export const patientXrayRouter = router({
       await assertPatientAccessible(ctx.db, ctx.session.user.organizationId, ctx.accessibleBranchIds, input.patientId);
 
       const objectKey = `xrays/${ctx.session.user.organizationId}/${input.patientId}/${randomUUID()}-${sanitizeFileName(input.fileName)}`;
-      const uploadUrl = await createUploadUrl(objectKey, input.contentType);
+      const uploadUrl = await createUploadUrl(objectKey, input.contentType, input.sizeBytes);
       return { uploadUrl, objectKey };
     }),
 

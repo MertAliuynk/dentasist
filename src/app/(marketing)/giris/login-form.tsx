@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signInWithCredentials } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ function LoginForm() {
             onSubmit={async (e) => {
               e.preventDefault();
               setIsSubmitting(true);
-              const result = await signIn("credentials", { email, password, redirect: false });
+              const result = await signInWithCredentials(email, password);
               setIsSubmitting(false);
               if (result?.error) {
                 toast.error("E-posta veya şifre hatalı.");

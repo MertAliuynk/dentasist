@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signInWithCredentials } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { toastError } from "@/lib/error-report";
 import { Button } from "@/components/ui/button";
@@ -27,11 +27,7 @@ function SignUpForm() {
 
   const signUp = trpc.signup.create.useMutation({
     onSuccess: async () => {
-      const result = await signIn("credentials", {
-        email: ownerEmail,
-        password: ownerPassword,
-        redirect: false,
-      });
+      const result = await signInWithCredentials(ownerEmail, ownerPassword);
       if (result?.error) {
         toast.error("Kayıt oluşturuldu ama otomatik giriş başarısız oldu. Lütfen giriş yapın.");
         router.push("/giris");

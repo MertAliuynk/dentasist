@@ -29,7 +29,7 @@ const keyPrefix = (organizationId: string, ticketId: string) => `support/${organ
 export async function signUpload(organizationId: string, input: z.infer<typeof uploadRequestInput>) {
   const safe = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100);
   const objectKey = `${keyPrefix(organizationId, input.ticketId)}${randomUUID()}-${safe}`;
-  return { objectKey, uploadUrl: await createUploadUrl(objectKey, input.contentType) };
+  return { objectKey, uploadUrl: await createUploadUrl(objectKey, input.contentType, input.sizeBytes) };
 }
 
 /** Rejects keys outside this ticket's prefix — a client can't attach someone else's file. */

@@ -122,10 +122,20 @@ function ensureBucket(): Promise<void> {
 const UPLOAD_URL_TTL_SECONDS = 5 * 60;
 const VIEW_URL_TTL_SECONDS = 10 * 60;
 
-export async function createUploadUrl(objectKey: string, contentType: string): Promise<string> {
+/**
+ * `sizeBytes` is signed into the URL (Content-Length is a signed header), so
+ * the upload only succeeds with exactly the size the server validated — the
+ * client can't declare 1 MB and then push 5 GB through the same link.
+ */
+export async function createUploadUrl(objectKey: string, contentType: string, sizeBytes: number): Promise<string> {
   await ensureBucket();
   const client = getClient({ public: true });
-  const command = new PutObjectCommand({ Bucket: getBucket(), Key: objectKey, ContentType: contentType });
+  const command = new PutObjectCommand({
+    Bucket: getBucket(),
+    Key: objectKey,
+    ContentType: contentType,
+    ContentLength: sizeBytes,
+  });
   return getSignedUrl(client, command, { expiresIn: UPLOAD_URL_TTL_SECONDS });
 }
 

@@ -10,13 +10,27 @@ async function getCsrfToken(): Promise<string> {
   return data.csrfToken;
 }
 
-export async function platformSignIn(email: string, password: string): Promise<boolean> {
+async function postCredentials(email: string, password: string): Promise<string | null> {
   const csrfToken = await getCsrfToken();
-  await fetch("/api/platform-auth/callback/credentials", {
+  const res = await fetch("/api/platform-auth/callback/credentials", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Auth-Return-Redirect": "1" },
     body: new URLSearchParams({ csrfToken, email, password, json: "true" }),
   });
+  const data = (await res.json().catch(() => null)) as { url?: string } | null;
+  try {
+    return data?.url ? new URL(data.url, window.location.origin).searchParams.get("error") : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function platformSignIn(email: string, password: string): Promise<boolean> {
+  // A stale csrf cookie (parallel requests minting different tokens) fails
+  // with MissingCSRF before the password is even checked; the cookie is
+  // settled after that round-trip, so retry once. Wrong passwords aren't retried.
+  const error = await postCredentials(email, password);
+  if (error && error !== "CredentialsSignin") await postCredentials(email, password);
 
   const sessionRes = await fetch("/api/platform-auth/session");
   const session = await sessionRes.json().catch(() => null);
