@@ -248,7 +248,7 @@ export const messagingRouter = router({
       await sendSmsAndLog(ctx.db, {
         organizationId: ctx.session.user.organizationId,
         phone: input.phone,
-        body: `${ctx.session.user.organizationName} - Dentasist SMS bağlantınız çalışıyor.`,
+        body: `${ctx.session.user.organizationName} - DişPanel SMS bağlantınız çalışıyor.`,
         kind: "TEST",
         sentByUserId: ctx.session.user.id,
       });

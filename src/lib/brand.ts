@@ -1,5 +1,5 @@
 export const brand = {
-  name: "Dentasist",
-  shortName: "Dentasist",
+  name: "DişPanel",
+  shortName: "DişPanel",
   tagline: "Dental, muhasebe ve laboratuvar süreçlerinizi tek platformda birleştirin.",
 } as const;

@@ -28,7 +28,8 @@ export const metadata: Metadata = {
   },
   description: brand.tagline,
   keywords: [
-    "dentasist",
+    "dişpanel",
+    "dispanel",
     "diş kliniği yazılımı",
     "diş hekimi randevu programı",
     "diş kliniği muhasebe programı",
