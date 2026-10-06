@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   AlertTriangle,
   PanelLeft,
+  UserPlus,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -41,7 +42,10 @@ export function PlatformShell({
 
   const navItems = [
     { href: "/admin", label: "Panel", icon: LayoutDashboard, exact: true },
-    { href: "/admin/organizasyonlar", label: "Klinikler", icon: Building2 },
+    { href: "/admin/organizasyonlar", label: "Klinikler", icon: Building2, exclude: "/admin/organizasyonlar/yeni" },
+    ...(platformUser.role !== "SUPPORT"
+      ? [{ href: "/admin/organizasyonlar/yeni", label: "Hesap Oluştur", icon: UserPlus, exact: true }]
+      : []),
     { href: "/admin/destek-talepleri", label: "Destek Talepleri", icon: LifeBuoy, badge: support?.open ?? 0, urgent: (support?.unreadCount ?? 0) > 0 },
     ...(platformUser.role === "OWNER"
       ? [{ href: "/admin/kullanicilar", label: "Ekip Üyeleri", icon: Users }]
@@ -70,7 +74,12 @@ export function PlatformShell({
         <nav className="flex-1 overflow-y-auto px-2">
           <div className="flex flex-col gap-0.5">
             {navItems.map((item) => {
-              const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+              const active =
+            "exclude" in item && item.exclude && pathname.startsWith(item.exclude)
+              ? false
+              : "exact" in item && item.exact
+                ? pathname === item.href
+                : pathname.startsWith(item.href);
               const Icon = item.icon;
               return (
                 <Link

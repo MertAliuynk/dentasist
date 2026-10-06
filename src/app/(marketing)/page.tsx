@@ -1,3 +1,4 @@
+import { SIGNUP_OPEN } from "@/lib/signup";
 import Link from "next/link";
 import {
   Building2,
@@ -73,8 +74,8 @@ export default function LandingPage() {
           </FadeIn>
           <FadeIn delay={0.15}>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" nativeButton={false} render={<Link href="/kayit" />}>
-                Ücretsiz Başla
+              <Button size="lg" nativeButton={false} render={<Link href={SIGNUP_OPEN ? "/kayit" : "/giris"} />}>
+                {SIGNUP_OPEN ? "Ücretsiz Başla" : "Giriş Yap"}
               </Button>
               <Button
                 size="lg"
@@ -361,8 +362,8 @@ export default function LandingPage() {
                 Dental ve Muhasebe modüllerini ayrı ayrı ya da birlikte kullanın, dilediğiniz
                 zaman yükseltin.
               </p>
-              <Button size="lg" nativeButton={false} render={<Link href="/kayit" />}>
-                Ücretsiz Başla
+              <Button size="lg" nativeButton={false} render={<Link href={SIGNUP_OPEN ? "/kayit" : "/giris"} />}>
+                {SIGNUP_OPEN ? "Ücretsiz Başla" : "Giriş Yap"}
               </Button>
             </CardContent>
           </Card>

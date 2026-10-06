@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { brand } from "@/lib/brand";
+import { SIGNUP_OPEN } from "@/lib/signup";
 
 export function MarketingFooter() {
   return (
@@ -18,9 +19,11 @@ export function MarketingFooter() {
           <Link href="/giris" className="hover:text-foreground">
             Giriş Yap
           </Link>
-          <Link href="/kayit" className="hover:text-foreground">
-            Ücretsiz Başla
-          </Link>
+          {SIGNUP_OPEN && (
+            <Link href="/kayit" className="hover:text-foreground">
+              Ücretsiz Başla
+            </Link>
+          )}
         </nav>
       </div>
     </footer>

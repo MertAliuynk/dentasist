@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "@/server/trpc/trpc";
 import { slugify } from "@/lib/utils/slug";
 import { checkRateLimit } from "@/server/security/rate-limit";
+import { SIGNUP_OPEN } from "@/lib/signup";
 
 const signUpInput = z.object({
   organizationName: z.string().trim().min(2).max(120),
@@ -16,6 +17,12 @@ const signUpInput = z.object({
 
 export const signupRouter = router({
   create: publicProcedure.input(signUpInput).mutation(async ({ ctx, input }) => {
+    if (!SIGNUP_OPEN) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Yeni kayıtlar şu an kapalı. Hesaplar ekibimiz tarafından açılmaktadır.",
+      });
+    }
     const rate = checkRateLimit(`signup:${ctx.clientIp}`, 5, 60 * 60 * 1000);
     if (!rate.allowed) {
       throw new TRPCError({

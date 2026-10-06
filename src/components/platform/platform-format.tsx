@@ -64,6 +64,7 @@ export const MODULE_LABEL: Record<string, string> = {
 export const PLATFORM_ACTION_LABEL: Record<string, string> = {
   "org.sensitive_peek": "Hasta verisi görüntülendi",
   "org.subscription_updated": "Abonelik güncellendi",
+  "org.created_by_platform": "Hesap ekip tarafından açıldı",
   "org.subscription_assigned": "Üyelik atandı / düzenlendi",
   "org.subscription_extended": "Üyelik uzatıldı",
   "org.subscription_shortened": "Üyelik kısaltıldı",

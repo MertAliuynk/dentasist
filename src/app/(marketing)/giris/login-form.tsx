@@ -3,7 +3,9 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getSession } from "next-auth/react";
 import { signInWithCredentials } from "@/lib/auth-client";
+import { SIGNUP_OPEN } from "@/lib/signup";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +16,7 @@ import { Mascot } from "@/components/marketing/mascot";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dental";
+  const callbackUrl = searchParams.get("callbackUrl");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +42,15 @@ function LoginForm() {
                 toast.error("E-posta veya şifre hatalı.");
                 return;
               }
-              router.push(callbackUrl);
+              // No explicit target: open the first module this clinic has —
+              // a Muhasebe-only clinic must not be bounced to /dental → /abonelik.
+              let target = callbackUrl;
+              if (!target) {
+                const session = await getSession();
+                const active = new Set(session?.user?.entitlements?.filter((x) => x.active).map((x) => x.module));
+                target = active.has("DENTAL") ? "/dental" : active.has("MUHASEBE") ? "/muhasebe" : active.has("LABORATUVAR") ? "/laboratuvar" : "/abonelik";
+              }
+              router.push(target);
               router.refresh();
             }}
           >
@@ -70,9 +80,13 @@ function LoginForm() {
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Hesabınız yok mu?{" "}
-            <Link href="/kayit" className="text-primary hover:underline">
-              Ücretsiz başlayın
-            </Link>
+            {SIGNUP_OPEN ? (
+              <Link href="/kayit" className="text-primary hover:underline">
+                Ücretsiz başlayın
+              </Link>
+            ) : (
+              "Hesaplar ekibimiz tarafından açılmaktadır."
+            )}
           </p>
         </CardContent>
       </Card>

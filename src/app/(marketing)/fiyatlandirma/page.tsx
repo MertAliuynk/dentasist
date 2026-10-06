@@ -1,3 +1,4 @@
+import { SIGNUP_OPEN } from "@/lib/signup";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Check } from "lucide-react";
@@ -70,13 +71,19 @@ export default async function PricingPage() {
               </ul>
             </CardContent>
             <CardFooter>
-              <Button
-                className="w-full"
-                nativeButton={false}
-                render={<Link href={`/kayit?plan=${plan.code}`} />}
-              >
-                Bu Planı Seç
-              </Button>
+              {SIGNUP_OPEN ? (
+                <Button
+                  className="w-full"
+                  nativeButton={false}
+                  render={<Link href={`/kayit?plan=${plan.code}`} />}
+                >
+                  Bu Planı Seç
+                </Button>
+              ) : (
+                <p className="w-full text-center text-xs text-muted-foreground">
+                  Pilot süreçte hesaplar ekibimiz tarafından açılıyor.
+                </p>
+              )}
             </CardFooter>
           </Card>
         ))}

@@ -10,6 +10,7 @@ import {
   assertSensitiveOrgAccess,
   logPlatformAction,
 } from "@/server/trpc/platform-trpc";
+import { slugify } from "@/lib/utils/slug";
 
 const STATUS = z.enum(["PENDING_PAYMENT", "ACTIVE", "PAST_DUE", "CANCELED", "TRIAL"]);
 const MODULE = z.enum(["DENTAL", "MUHASEBE", "LABORATUVAR"]);
@@ -21,6 +22,54 @@ function generateTempPassword() {
   const alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({ length: 10 }, () => alphabet[randomInt(alphabet.length)]).join("");
 }
+
+const DOCTOR_COLORS = ["#4F46E5", "#0EA5E9", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6"];
+
+const optionalText = (max: number) => z.string().trim().max(max).optional().or(z.literal(""));
+const password = z.string().min(8, "Şifre en az 8 karakter olmalı.").max(72).optional().or(z.literal(""));
+
+const createAccountInput = z.object({
+  organization: z.object({
+    name: z.string().trim().min(2, "Klinik adı en az 2 karakter olmalı.").max(120),
+    phone: optionalText(30),
+    address: optionalText(300),
+    taxNumber: optionalText(20),
+    taxOffice: optionalText(80),
+    billingEmail: z.string().trim().email("Fatura e-postası geçersiz.").optional().or(z.literal("")),
+  }),
+  planId: z.string().min(1, "Plan seçin."),
+  status: z.enum(["TRIAL", "ACTIVE"]),
+  currentPeriodEnd: z.string().datetime().nullable(),
+  modules: z.array(MODULE).min(1, "En az bir modül seçin."),
+  adminNote: optionalText(2000),
+  branches: z
+    .array(z.object({ name: z.string().trim().min(2, "Şube adı en az 2 karakter olmalı.").max(120), address: optionalText(300), phone: optionalText(30) }))
+    .min(1, "En az bir şube ekleyin.")
+    .max(30),
+  owner: z.object({
+    name: z.string().trim().min(2, "Sahibin adı en az 2 karakter olmalı.").max(120),
+    email: z.string().trim().email("Sahibin e-postası geçersiz."),
+    phone: optionalText(30),
+    password,
+    isDoctor: z.boolean().default(false),
+    title: optionalText(60),
+    commissionRate: z.number().min(0).max(100).optional(),
+  }),
+  staff: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2, "Personel adı en az 2 karakter olmalı.").max(120),
+        email: z.string().trim().email("Personel e-postası geçersiz."),
+        phone: optionalText(30),
+        role: z.enum(["SUBE_YONETICISI", "DOKTOR", "SEKRETER", "TEKNISYEN"]),
+        branchIndex: z.number().int().min(0),
+        password,
+        title: optionalText(60),
+        commissionRate: z.number().min(0).max(100).optional(),
+      }),
+    )
+    .max(50),
+});
 
 async function getSubscriptionOrThrow(db: Prisma.TransactionClient, organizationId: string) {
   const sub = await db.subscription.findUnique({
@@ -534,5 +583,197 @@ export const platformOrganizationRouter = platformRouter({
         diff: { email: user.email },
       });
       return { password, email: user.email };
+    }),
+
+  // ---------------------------------------------------------------------
+  // "Yeni Hesap" — the team opens a clinic account (pilot phase: public
+  // sign-up is closed). Everything is created in one transaction: clinic,
+  // subscription + modules, branches, the owner (PATRON) and optional staff.
+  // Generated passwords are returned exactly once so they can be handed to
+  // the clinic; only bcrypt hashes are stored.
+
+  checkEmails: platformProcedure
+    .use(requirePlatformCapability("platform:org:manage"))
+    .input(z.object({ emails: z.array(z.string().trim().toLowerCase()).max(60) }))
+    .query(async ({ ctx, input }) => {
+      const emails = [...new Set(input.emails.filter((e) => e.includes("@")))];
+      if (!emails.length) return { taken: [] as string[] };
+      const users = await ctx.db.user.findMany({
+        where: { email: { in: emails, mode: "insensitive" } },
+        select: { email: true },
+      });
+      return { taken: users.map((u) => u.email.toLowerCase()) };
+    }),
+
+  createAccount: platformProcedure
+    .use(requirePlatformCapability("platform:org:manage"))
+    .input(createAccountInput)
+    .mutation(async ({ ctx, input }) => {
+      const plan = await ctx.db.plan.findUnique({ where: { id: input.planId } });
+      if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Plan bulunamadı." });
+
+      // Every login e-mail must be unique — within this form and globally.
+      const people = [{ ...input.owner, label: "Klinik sahibi" }, ...input.staff.map((s, i) => ({ ...s, label: `Personel #${i + 1}` }))];
+      const emails = people.map((p) => p.email.toLowerCase());
+      const dup = emails.find((e, i) => emails.indexOf(e) !== i);
+      if (dup) throw new TRPCError({ code: "BAD_REQUEST", message: `${dup} adresi formda birden fazla kez kullanılmış.` });
+      const taken = await ctx.db.user.findMany({ where: { email: { in: emails, mode: "insensitive" } }, select: { email: true } });
+      if (taken.length) {
+        throw new TRPCError({ code: "CONFLICT", message: `Bu e-posta zaten kayıtlı: ${taken.map((t) => t.email).join(", ")}` });
+      }
+      const branchNames = input.branches.map((b) => b.name.toLocaleLowerCase("tr"));
+      if (new Set(branchNames).size !== branchNames.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Aynı isimde iki şube var." });
+      }
+      for (const s of input.staff) {
+        if (s.branchIndex >= input.branches.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `${s.name} için seçilen şube bulunamadı.` });
+        }
+      }
+
+      const baseSlug = slugify(input.organization.name) || "klinik";
+      let slug = baseSlug;
+      for (let n = 2; await ctx.db.organization.findUnique({ where: { slug }, select: { id: true } }); n++) slug = `${baseSlug}-${n}`;
+
+      // Passwords: the one typed in the form, or a generated readable one.
+      const withPasswords = people.map((p) => ({ ...p, plainPassword: p.password || generateTempPassword() }));
+      const hashes = await Promise.all(withPasswords.map((p) => bcrypt.hash(p.plainPassword, 12)));
+
+      const created = await ctx.db.$transaction(async (tx) => {
+        const org = await tx.organization.create({
+          data: {
+            name: input.organization.name,
+            slug,
+            phone: input.organization.phone || null,
+            address: input.organization.address || null,
+            taxNumber: input.organization.taxNumber || null,
+            taxOffice: input.organization.taxOffice || null,
+            billingEmail: input.organization.billingEmail || null,
+          },
+        });
+
+        const sub = await tx.subscription.create({
+          data: {
+            organizationId: org.id,
+            planId: plan.id,
+            status: input.status,
+            startedAt: new Date(),
+            currentPeriodEnd: input.currentPeriodEnd ? new Date(input.currentPeriodEnd) : null,
+            adminNote: input.adminNote || null,
+            paymentStub: { note: "Platform ekibi tarafından açıldı (pilot)." },
+          },
+        });
+        await tx.entitlement.createMany({
+          data: input.modules.map((module) => ({ subscriptionId: sub.id, module, active: true })),
+        });
+
+        const branches = [];
+        for (const b of input.branches) {
+          branches.push(
+            await tx.branch.create({
+              data: { organizationId: org.id, name: b.name, address: b.address || null, phone: b.phone || null },
+            }),
+          );
+        }
+
+        const accounts: { name: string; email: string; role: string; branchName: string | null; password: string; generated: boolean }[] = [];
+
+        const owner = await tx.user.create({
+          data: {
+            organizationId: org.id,
+            name: input.owner.name,
+            email: input.owner.email.toLowerCase(),
+            phone: input.owner.phone || null,
+            passwordHash: hashes[0],
+          },
+        });
+        // PATRON is org-wide (branchId null) — sees every branch.
+        await tx.membership.create({ data: { userId: owner.id, organizationId: org.id, branchId: null, role: "PATRON" } });
+        if (input.owner.isDoctor) {
+          await tx.doctor.create({
+            data: {
+              userId: owner.id,
+              organizationId: org.id,
+              branchId: branches[0].id,
+              title: input.owner.title || null,
+              commissionRate: input.owner.commissionRate ?? 0,
+              colorHex: DOCTOR_COLORS[0],
+            },
+          });
+        }
+        accounts.push({
+          name: owner.name,
+          email: owner.email,
+          role: input.owner.isDoctor ? "PATRON + DOKTOR" : "PATRON",
+          branchName: null,
+          password: withPasswords[0].plainPassword,
+          generated: !input.owner.password,
+        });
+
+        let doctorIdx = input.owner.isDoctor ? 1 : 0;
+        for (const [i, s] of input.staff.entries()) {
+          const branch = branches[s.branchIndex];
+          const user = await tx.user.create({
+            data: {
+              organizationId: org.id,
+              name: s.name,
+              email: s.email.toLowerCase(),
+              phone: s.phone || null,
+              passwordHash: hashes[i + 1],
+            },
+          });
+          await tx.membership.create({ data: { userId: user.id, organizationId: org.id, branchId: branch.id, role: s.role } });
+          if (s.role === "DOKTOR") {
+            await tx.doctor.create({
+              data: {
+                userId: user.id,
+                organizationId: org.id,
+                branchId: branch.id,
+                title: s.title || null,
+                commissionRate: s.commissionRate ?? 0,
+                colorHex: DOCTOR_COLORS[doctorIdx++ % DOCTOR_COLORS.length],
+              },
+            });
+          }
+          accounts.push({
+            name: user.name,
+            email: user.email,
+            role: s.role,
+            branchName: branch.name,
+            password: withPasswords[i + 1].plainPassword,
+            generated: !s.password,
+          });
+        }
+
+        return { org, subId: sub.id, accounts, branchNames: branches.map((b) => b.name) };
+        // Large teams mean many inserts; the 5 s default is too tight.
+      }, { timeout: 30_000 });
+
+      await logPlatformAction(ctx.db, ctx.platformUser.id, "org.created_by_platform", {
+        organizationId: created.org.id,
+        entityType: "Organization",
+        entityId: created.org.id,
+        // Never log passwords.
+        diff: {
+          name: created.org.name,
+          planName: plan.name,
+          status: input.status,
+          currentPeriodEnd: input.currentPeriodEnd,
+          modules: input.modules,
+          branches: created.branchNames,
+          users: created.accounts.map((a) => ({ email: a.email, role: a.role, branch: a.branchName })),
+        },
+      });
+
+      return {
+        organizationId: created.org.id,
+        organizationName: created.org.name,
+        planName: plan.name,
+        status: input.status,
+        currentPeriodEnd: input.currentPeriodEnd,
+        modules: input.modules,
+        branches: created.branchNames,
+        accounts: created.accounts,
+      };
     }),
 });

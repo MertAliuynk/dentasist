@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -54,8 +54,11 @@ function OrganizationsList() {
   return (
     <div className="mx-auto w-full max-w-7xl">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">Klinikler</CardTitle>
+          <Button size="sm" nativeButton={false} render={<Link href="/admin/organizasyonlar/yeni" />}>
+            <Plus className="size-4" /> Yeni Hesap
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">

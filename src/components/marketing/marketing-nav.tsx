@@ -6,6 +6,7 @@ import { Menu, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { brand } from "@/lib/brand";
+import { SIGNUP_OPEN } from "@/lib/signup";
 
 const links = [
   { href: "/#dental", label: "Dental" },
@@ -40,12 +41,14 @@ export function MarketingNav() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" nativeButton={false} render={<Link href="/giris" />}>
+          <Button variant={SIGNUP_OPEN ? "ghost" : "default"} nativeButton={false} render={<Link href="/giris" />}>
             Giriş Yap
           </Button>
-          <Button nativeButton={false} render={<Link href="/kayit" />}>
-            Ücretsiz Başla
-          </Button>
+          {SIGNUP_OPEN && (
+            <Button nativeButton={false} render={<Link href="/kayit" />}>
+              Ücretsiz Başla
+            </Button>
+          )}
         </div>
 
         <Sheet open={open} onOpenChange={setOpen}>
@@ -77,12 +80,14 @@ export function MarketingNav() {
                 >
                   Giriş Yap
                 </Button>
-                <Button
-                  nativeButton={false}
-                  render={<Link href="/kayit" onClick={() => setOpen(false)} />}
-                >
-                  Ücretsiz Başla
-                </Button>
+                {SIGNUP_OPEN && (
+                  <Button
+                    nativeButton={false}
+                    render={<Link href="/kayit" onClick={() => setOpen(false)} />}
+                  >
+                    Ücretsiz Başla
+                  </Button>
+                )}
               </div>
             </nav>
           </SheetContent>
