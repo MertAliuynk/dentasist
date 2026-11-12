@@ -132,7 +132,7 @@
   }
 }
 
-/* DişPanel mascot animations — see src/components/marketing/mascot.tsx */
+/* DentalPanels mascot animations — see src/components/marketing/mascot.tsx */
 @keyframes mascot-float {
   0%, 100% { transform: translateY(0) rotate(-1deg); }
   50% { transform: translateY(-10px) rotate(1deg); }

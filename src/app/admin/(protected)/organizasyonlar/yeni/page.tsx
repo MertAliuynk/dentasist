@@ -280,7 +280,7 @@ type CreateResult = {
 function credentialsText(r: CreateResult) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const lines = [
-    `${r.organizationName} — DişPanel hesabınız hazır.`,
+    `${r.organizationName} — DentalPanels hesabınız hazır.`,
     `Giriş adresi: ${origin}/giris`,
     "",
     ...r.accounts.flatMap((a) => [

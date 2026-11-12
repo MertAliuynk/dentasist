@@ -23,7 +23,7 @@ services:
       PLATFORM_AUTH_SECRET: ${PLATFORM_AUTH_SECRET}
       PLATFORM_OWNER_EMAIL: ${PLATFORM_OWNER_EMAIL}
       PLATFORM_OWNER_PASSWORD: ${PLATFORM_OWNER_PASSWORD}
-      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-DişPanel}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-DentalPanels}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
       NODE_ENV: production
       # Object storage (RustFS, S3-compatible) over the internal network.

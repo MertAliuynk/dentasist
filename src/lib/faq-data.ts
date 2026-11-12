@@ -1,6 +1,6 @@
 export const FAQ_ITEMS = [
   {
-    question: "DişPanel tam olarak nedir?",
+    question: "DentalPanels tam olarak nedir?",
     answer:
       "Diş kliniklerinin hasta, randevu ve tedavi süreçlerini yönettiği Dental modülü ile kasa, ödeme planı ve hekim hakediş takibini yönettiği Muhasebe modülünü tek bir platformda birleştiren bir bulut yazılımıdır. İki modül birbirinden bağımsız da, birlikte de kullanılabilir.",
   },

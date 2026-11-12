@@ -1,4 +1,4 @@
-// Prisma schema — DişPanel
+// Prisma schema — DentalPanels
 // Money is always stored as Int in kuruş (TL minor unit) to avoid float rounding errors.
 
 generator client {

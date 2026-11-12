@@ -1,4 +1,4 @@
-// DişPanel's mascot — a friendly, animated tooth character. Pure inline SVG
+// DentalPanels's mascot — a friendly, animated tooth character. Pure inline SVG
 // + CSS keyframes (see globals.css), no external image assets: keeps the
 // bundle light, needs no licensing, and adapts to light/dark automatically
 // since every color is either a theme token or a fixed white/ivory that
