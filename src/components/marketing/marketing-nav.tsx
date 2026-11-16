@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { brand } from "@/lib/brand";
 import { SIGNUP_OPEN } from "@/lib/signup";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 const links = [
   { href: "/#dental", label: "Dental" },
   { href: "/#muhasebe", label: "Muhasebe" },
+  { href: "/#laboratuvar", label: "Laboratuvar" },
   { href: "/fiyatlandirma", label: "Fiyatlandırma" },
   { href: "/sss", label: "SSS" },
 ];
@@ -28,7 +30,7 @@ export function MarketingNav() {
           <span className="text-sm sm:text-base">{brand.name}</span>
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden items-center gap-6 md:flex lg:gap-8">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -41,6 +43,7 @@ export function MarketingNav() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
+          <ThemeToggle />
           <Button variant={SIGNUP_OPEN ? "ghost" : "default"} nativeButton={false} render={<Link href="/giris" />}>
             Giriş Yap
           </Button>
@@ -51,10 +54,12 @@ export function MarketingNav() {
           )}
         </div>
 
+        <div className="flex items-center gap-1 md:hidden">
+        <ThemeToggle />
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
             render={
-              <Button variant="ghost" size="icon" aria-label="Menüyü aç" className="md:hidden" />
+              <Button variant="ghost" size="icon" aria-label="Menüyü aç" />
             }
           >
             <Menu className="size-5" />
@@ -92,6 +97,7 @@ export function MarketingNav() {
             </nav>
           </SheetContent>
         </Sheet>
+        </div>
       </div>
     </header>
   );

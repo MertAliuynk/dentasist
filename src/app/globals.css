@@ -39,6 +39,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -82,6 +84,9 @@
   --sidebar-accent-foreground: oklch(0.16 0 0);
   --sidebar-border: oklch(0.92 0 0);
   --sidebar-ring: oklch(0.16 0 0 / 25%);
+  /* Marketing accent (landing page only) */
+  --brand: oklch(0.5 0.09 192);
+  --brand-soft: oklch(0.965 0.018 192);
 }
 
 .dark {
@@ -118,6 +123,8 @@
   --sidebar-accent-foreground: oklch(0.96 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.96 0 0 / 25%);
+  --brand: oklch(0.78 0.1 188);
+  --brand-soft: oklch(0.23 0.025 192);
 }
 
 @layer base {

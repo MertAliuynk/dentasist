@@ -1,48 +1,116 @@
 import { SIGNUP_OPEN } from "@/lib/signup";
 import Link from "next/link";
-import {
-  Building2,
-  CalendarClock,
-  ClipboardList,
-  FlaskConical,
-  Lock,
-  Receipt,
-  ShieldCheck,
-  Stethoscope,
-  UserCog,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { brand } from "@/lib/brand";
 import { FadeIn } from "@/components/marketing/fade-in";
-import { Mascot } from "@/components/marketing/mascot";
+import { CalendarMock, CashMock, LabMock, PatientCardMock } from "@/components/marketing/product-mocks";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+const PRIMARY_HREF = SIGNUP_OPEN ? "/kayit" : "/giris";
+const PRIMARY_LABEL = SIGNUP_OPEN ? "Ücretsiz Başla" : "Giriş Yap";
+
+const DAY = [
+  {
+    time: "08:45",
+    who: "Sekreter",
+    what: "Günün takvimini açar; gelmeyen hastayı “gelmedi” olarak işaretler, boşalan saati sürükleyerek başka hastaya verir.",
+  },
+  {
+    time: "09:30",
+    who: "Doktor",
+    what: "Hasta kartında diş şemasından 36 ve 37'yi seçip tedavi önerir. Öneri, hastanın geçmişiyle birlikte kartta kalır.",
+  },
+  {
+    time: "11:00",
+    who: "Sekreter",
+    what: "Hasta onay verince 6 taksitlik ödeme planı oluşturur. Bir taksiti değiştirirse kalan bakiye diğerlerine kendiliğinden dağılır.",
+  },
+  {
+    time: "14:20",
+    who: "Laboratuvar",
+    what: "Klinikten gelen kron işini kaydeder; hangi klinikten ne kadar alacağı olduğunu ayrı ayrı görür.",
+  },
+  {
+    time: "18:00",
+    who: "Şube yöneticisi",
+    what: "Günlük kasayı nakit, kart ve havale olarak kapatır; bekleyen ve geciken tahsilatlara bakar.",
+  },
+  {
+    time: "18:15",
+    who: "Patron",
+    what: "Bütün şubeleri ve hekim hakedişlerini aynı tabloda karşılaştırır.",
+  },
+];
+
+const ROLES = [
+  { name: "Patron", desc: "Tüm şubeleri, kasaları ve hekim hakedişlerini tek yerden izler." },
+  { name: "Şube yöneticisi", desc: "Yalnızca kendi şubesinin randevu, hasta, kasa ve raporlarını yönetir." },
+  { name: "Doktor", desc: "Kendi hastalarını, randevularını ve önerdiği tedavileri görür." },
+  { name: "Sekreter", desc: "Bütün doktorların takvimini yönetir, hasta kaydı açar, tahsilat girer." },
+];
+
+function ModuleRow({
+  id,
+  index,
+  name,
+  title,
+  body,
+  points,
+  mock,
+  reverse,
+}: {
+  id: string;
+  index: string;
+  name: string;
+  title: string;
+  body: string;
+  points: string[];
+  mock: React.ReactNode;
+  reverse?: boolean;
+}) {
+  return (
+    <section id={id} className="scroll-mt-20 border-t border-border">
+      <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-2 lg:gap-16">
+        <FadeIn className={reverse ? "lg:order-2" : ""}>
+          <div>
+            <p className="font-mono text-xs text-muted-foreground">
+              {index} <span className="mx-1.5 text-border">/</span>
+              <span className="text-brand">{name}</span>
+            </p>
+            <h2 className="mt-3 max-w-md text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h2>
+            <p className="mt-4 max-w-md text-muted-foreground">{body}</p>
+            <ul className="mt-6 max-w-md space-y-2.5 text-sm">
+              {points.map((p) => (
+                <li key={p} className="flex gap-3">
+                  <span className="mt-2 h-px w-3 shrink-0 bg-foreground/40" />
+                  <span>{p}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </FadeIn>
+        <FadeIn delay={0.08} className={reverse ? "lg:order-1" : ""}>
+          {mock}
+        </FadeIn>
+      </div>
+    </section>
+  );
+}
 
 export default function LandingPage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
-      {
-        "@type": "Organization",
-        name: brand.name,
-        url: SITE_URL,
-        description: brand.tagline,
-      },
+      { "@type": "Organization", name: brand.name, url: SITE_URL, description: brand.tagline },
       {
         "@type": "SoftwareApplication",
         name: brand.name,
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web",
         description: brand.tagline,
-        offers: {
-          "@type": "AggregateOffer",
-          priceCurrency: "TRY",
-          availability: "https://schema.org/InStock",
-        },
+        offers: { "@type": "AggregateOffer", priceCurrency: "TRY", availability: "https://schema.org/InStock" },
       },
     ],
   };
@@ -51,323 +119,181 @@ export default function LandingPage() {
     <div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_50%_0%,var(--accent),transparent)]" />
-        <div className="mx-auto flex max-w-4xl flex-col items-center px-4 py-24 text-center sm:px-6 sm:py-32">
-          <FadeIn>
-            <Mascot className="mb-4 h-28 w-28 sm:h-36 sm:w-36" />
-          </FadeIn>
-          <FadeIn>
-            <Badge variant="secondary" className="mb-6">
-              Tek platformda dental ve muhasebe
-            </Badge>
-          </FadeIn>
-          <FadeIn delay={0.05}>
-            <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-6xl">
-              {brand.name}
-            </h1>
-          </FadeIn>
-          <FadeIn delay={0.1}>
-            <p className="mt-6 text-balance text-lg text-muted-foreground sm:text-xl">
-              {brand.tagline} Kliniğinizi, şubelerinizi ve ekibinizi tek çatı altında yönetin.
+      {/* Hero */}
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1fr_1.05fr] lg:gap-14 lg:pb-24">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Diş klinikleri ve laboratuvarlar için yönetim yazılımı
+          </p>
+          <h1 className="mt-4 text-balance text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.4rem]">
+            Randevudan kasaya, kliniğin bütün günü{" "}
+            <span className="text-brand">tek ekranda.</span>
+          </h1>
+          <p className="mt-6 max-w-lg text-pretty text-lg text-muted-foreground">
+            Takvim, hasta kartı, ödeme planı ve günlük kasa birbirinden habersiz çalışmasın.
+            {" "}{brand.name}, şubelerinizi ve ekibinizi aynı kayıt üzerinde buluşturur.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <Button size="lg" nativeButton={false} render={<Link href={PRIMARY_HREF} />}>
+              {PRIMARY_LABEL}
+            </Button>
+            <Link
+              href="/fiyatlandirma"
+              className="group inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline"
+            >
+              Fiyatları gör
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </div>
+          {!SIGNUP_OPEN && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              Pilot dönemde hesaplar ekibimiz tarafından açılıyor.
             </p>
-          </FadeIn>
-          <FadeIn delay={0.15}>
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" nativeButton={false} render={<Link href={SIGNUP_OPEN ? "/kayit" : "/giris"} />}>
-                {SIGNUP_OPEN ? "Ücretsiz Başla" : "Giriş Yap"}
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                nativeButton={false}
-                render={<Link href="/fiyatlandirma" />}
-              >
-                Fiyatlandırmayı İncele
-              </Button>
-            </div>
-          </FadeIn>
+          )}
+        </div>
+
+        <div className="relative">
+          <CalendarMock />
+          <div className="relative -mt-8 ml-auto hidden w-[78%] sm:block lg:-mr-6">
+            <PatientCardMock />
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <FadeIn>
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Nasıl çalışır?</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-              Kaydolduktan birkaç dakika sonra kliniğiniz sistemde, ekibiniz kendi rolüne özel
-              ekranlarla çalışmaya başlar.
-            </p>
-          </div>
-        </FadeIn>
-        <div className="grid gap-8 sm:grid-cols-3">
+      {/* Facts strip */}
+      <section className="border-y border-border bg-muted/40">
+        <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-px px-4 sm:px-6 lg:grid-cols-4">
           {[
-            {
-              step: "1",
-              title: "Planınızı seçin, kaydolun",
-              desc: "Dental, Muhasebe ya da ikisi birlikte — ihtiyacınıza uygun planı seçip klinik hesabınızı birkaç dakikada oluşturun.",
-            },
-            {
-              step: "2",
-              title: "Şube ve ekibinizi tanımlayın",
-              desc: "Şubelerinizi, doktorlarınızı ve personelinizi ekleyin; her kullanıcıya rolüne uygun yetkiler otomatik atanır.",
-            },
-            {
-              step: "3",
-              title: "Randevu, tedavi ve kasayı yönetin",
-              desc: "Takvim, hasta kartları, ödeme planları ve raporlar aynı gün kullanıma hazır.",
-            },
-          ].map((s, i) => (
-            <FadeIn key={s.step} delay={i * 0.05}>
-              <div className="flex flex-col items-center text-center sm:items-start sm:text-left">
-                <span className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                  {s.step}
-                </span>
-                <h3 className="mt-4 font-medium">{s.title}</h3>
-                <p className="mt-1.5 text-sm text-muted-foreground">{s.desc}</p>
+            { k: "3 modül", v: "Dental, muhasebe ve laboratuvar; ayrı ya da birlikte" },
+            { k: "Çok şubeli", v: "Her şubenin takvimi ve kasası ayrı, raporu ortak" },
+            { k: "4 rol", v: "Herkes yalnızca kendi işiyle ilgili ekranı görür" },
+            { k: "Denetim kaydı", v: "Kritik işlemlerde kim, ne zaman yaptı bilgisi" },
+          ].map((f) => (
+            <div key={f.k} className="py-6 pr-4">
+              <dt className="text-sm font-semibold">{f.k}</dt>
+              <dd className="mt-1 text-sm text-muted-foreground">{f.v}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      {/* A day in the clinic */}
+      <section className="mx-auto grid max-w-6xl gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+            Klinikte sıradan bir salı
+          </h2>
+          <p className="mt-4 max-w-sm text-muted-foreground">
+            Aynı hasta sabah takvimde, öğlen hasta kartında, akşam kasada. Kimse bilgiyi bir
+            yerden başka bir yere taşımak zorunda kalmaz.
+          </p>
+        </div>
+        <ol className="relative border-l border-border">
+          {DAY.map((d, i) => (
+            <li key={d.time + d.who} className={`relative pl-8 ${i === DAY.length - 1 ? "" : "pb-9"}`}>
+              <span className="absolute -left-[5px] top-1.5 size-2.5 rounded-full border-2 border-background bg-brand ring-1 ring-brand/40" />
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="font-mono text-sm tabular-nums text-muted-foreground">{d.time}</span>
+                <span className="text-sm font-semibold">{d.who}</span>
               </div>
-            </FadeIn>
+              <p className="mt-1.5 max-w-xl text-[15px] leading-relaxed text-foreground/85">{d.what}</p>
+            </li>
           ))}
+        </ol>
+      </section>
+
+      {/* Modules */}
+      <ModuleRow
+        id="dental"
+        index="01"
+        name="Dental"
+        title="Hasta kartı, diş şeması ve takvim aynı yerde"
+        body="Doktorun önerdiği tedavi, sekreterin verdiği randevu ve hastanın geçmişi tek kartta birikir."
+        points={[
+          "Doktor bazlı renkli takvim; sürükle-bırak ile yeniden planlama",
+          "Sürekli ve süt dişleri için tıklanabilir diş şeması",
+          "Önerilen, onaylanan ve tamamlanan tedaviler ayrı ayrı izlenir",
+          "Tek seferde 50 hastaya kadar toplu kayıt",
+        ]}
+        mock={<PatientCardMock />}
+      />
+      <ModuleRow
+        id="muhasebe"
+        index="02"
+        name="Muhasebe"
+        title="Kasa, taksitler ve hekim hakedişleri"
+        body="Günlük kasadan şubeler arası rapora kadar kliniğin parası nereye gidiyor, açıkça görünür."
+        points={[
+          "Nakit, kredi kartı ve havale bazında günlük kasa",
+          "Taksit sayısı ve tutarı düzenlenebilen ödeme planları",
+          "Hekim başı hakediş ve geciken tahsilat listesi",
+          "Şubeleri yan yana karşılaştıran raporlar",
+        ]}
+        mock={<CashMock />}
+        reverse
+      />
+      <ModuleRow
+        id="laboratuvar"
+        index="03"
+        name="Laboratuvar"
+        title="Klinikten gelen işler ve alacaklar"
+        body="Laboratuvarlar çalıştıkları klinikleri, gelen işleri ve tahsilatları kendi panelinden yönetir."
+        points={[
+          "Klinik ve hasta bazında iş kaydı",
+          "Her kliniğin ödemesini ayrı takip",
+          "Kasa ve dönemsel raporlar",
+        ]}
+        mock={<LabMock />}
+      />
+
+      {/* Roles */}
+      <section className="border-t border-border bg-muted/40">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <h2 className="max-w-xl text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+            Herkes kendi işini görür, fazlasını değil
+          </h2>
+          <dl className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+            {ROLES.map((r) => (
+              <div key={r.name} className="border-t border-foreground/80 pt-4">
+                <dt className="font-semibold">{r.name}</dt>
+                <dd className="mt-2 text-sm text-muted-foreground">{r.desc}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-12 max-w-2xl text-sm text-muted-foreground">
+            Her klinik kendi organizasyon alanında çalışır; veriler başka kliniklerle karışmaz.
+            Ödeme planı onayı, taksit düzenleme ve hasta silme gibi işlemler denetim kaydına
+            düşer, giriş denemeleri kötüye kullanıma karşı sınırlandırılır.
+          </p>
         </div>
       </section>
 
-      <section id="dental" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <FadeIn>
-          <div className="mb-12 text-center">
-            <Badge variant="outline" className="mb-3">
-              Dental
-            </Badge>
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              Hasta ve randevu yönetimi, tek ekrandan
+      {/* CTA */}
+      <section className="bg-foreground text-background">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-16 sm:px-6 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="max-w-xl text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+              Kliniğinizi bir sonraki salıdan önce taşıyalım.
             </h2>
-            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-              Doktor, sekreter, şube yöneticisi ve patron için ayrı ayrı tasarlanmış roller;
-              sürükle-bırak randevu takvimi ve uçtan uca hasta takibi.
+            <p className="mt-3 max-w-lg text-background/70">
+              Modülleri ayrı ayrı ya da birlikte kullanın, dilediğiniz zaman yükseltin. Merak
+              ettikleriniz için{" "}
+              <Link href="/sss" className="underline underline-offset-4 hover:text-background">
+                sık sorulan sorular
+              </Link>
+              .
             </p>
           </div>
-        </FadeIn>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            {
-              icon: CalendarClock,
-              title: "Şık Randevu Takvimi",
-              desc: "Doktor bazlı renklendirme, sürükle-bırak ile yeniden planlama ve tek tıkla randevu oluşturma.",
-            },
-            {
-              icon: Users,
-              title: "Hasta Kartı",
-              desc: "Önerilen, onaylanan ve tamamlanan tedaviler; notlar ve randevu geçmişi tek sayfada.",
-            },
-            {
-              icon: ClipboardList,
-              title: "Toplu Hasta Ekleme",
-              desc: "Tek seferde 50'ye kadar hasta kaydı, zorunlu alanlarla hızlı veri girişi.",
-            },
-          ].map((f, i) => (
-            <FadeIn key={f.title} delay={i * 0.05}>
-              <Card className="h-full">
-                <CardHeader>
-                  <f.icon className="size-6 text-primary" />
-                  <CardTitle className="mt-2">{f.title}</CardTitle>
-                  <CardDescription>{f.desc}</CardDescription>
-                </CardHeader>
-              </Card>
-            </FadeIn>
-          ))}
+          <Button
+            size="lg"
+            variant="secondary"
+            className="self-start md:self-auto"
+            nativeButton={false}
+            render={<Link href={PRIMARY_HREF} />}
+          >
+            {PRIMARY_LABEL}
+          </Button>
         </div>
-      </section>
-
-      <section id="muhasebe" className="bg-secondary/40 py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <FadeIn>
-            <div className="mb-12 text-center">
-              <Badge variant="outline" className="mb-3">
-              Muhasebe
-            </Badge>
-              <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Kasa, ödeme planları ve hekim hakedişleri
-              </h2>
-              <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-                Günlük kasa takibinden esnek taksitlendirmeye, şubeler arası karşılaştırmalı
-                raporlara kadar kliniğinizin finansal görünürlüğü.
-              </p>
-            </div>
-          </FadeIn>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                icon: Wallet,
-                title: "Günlük Kasa",
-                desc: "Nakit, havale ve kredi kartı bazında anlık kasa durumu ve gelir-gider takibi.",
-              },
-              {
-                icon: Receipt,
-                title: "Esnek Ödeme Planları",
-                desc: "Taksit sayısı ve tutarını istediğiniz gibi düzenleyin, kalan bakiye otomatik dağılsın.",
-              },
-              {
-                icon: ShieldCheck,
-                title: "Şubeler Arası Raporlar",
-                desc: "Hekim başı hakediş, bekleyen ve gecikmiş tahsilatlar tek bakışta.",
-              },
-            ].map((f, i) => (
-              <FadeIn key={f.title} delay={i * 0.05}>
-                <Card className="h-full bg-background">
-                  <CardHeader>
-                    <f.icon className="size-6 text-primary" />
-                    <CardTitle className="mt-2">{f.title}</CardTitle>
-                    <CardDescription>{f.desc}</CardDescription>
-                  </CardHeader>
-                </Card>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <FadeIn>
-          <div className="mb-12 text-center">
-            <Badge variant="outline" className="mb-3">
-              Roller
-            </Badge>
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              Herkes kendi işine odaklanır
-            </h2>
-            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-              Dental ve Muhasebe modüllerinin her biri, kliniğinizdeki gerçek görev dağılımına
-              göre tasarlanmış rollerle gelir; her kullanıcı yalnızca kendi işiyle ilgili verileri
-              görür.
-            </p>
-          </div>
-        </FadeIn>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <FadeIn>
-            <Card className="h-full">
-              <CardHeader>
-                <Stethoscope className="size-6 text-primary" />
-                <CardTitle className="mt-2">Dental rolleri</CardTitle>
-                <CardDescription>Patron, Şube Yöneticisi, Doktor, Sekreter</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  <span className="font-medium text-foreground">Patron</span>, tüm şubeleri ve
-                  şubeler arası performansı tek yerden izler.
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">Şube Yöneticisi</span>, yalnızca
-                  kendi şubesinin randevu, hasta ve raporlarını yönetir.
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">Doktor</span>, kendi hastalarını,
-                  randevularını ve önerdiği tedavileri görür.
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">Sekreter</span>, tüm doktorların
-                  takvimini yönetir, hasta kaydı ve randevu oluşturur.
-                </p>
-              </CardContent>
-            </Card>
-          </FadeIn>
-          <FadeIn delay={0.05}>
-            <Card className="h-full">
-              <CardHeader>
-                <UserCog className="size-6 text-primary" />
-                <CardTitle className="mt-2">Muhasebe rolleri</CardTitle>
-                <CardDescription>Patron, Şube Yöneticisi, Sekreter</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  <span className="font-medium text-foreground">Patron</span>, tüm şubelerin
-                  günlük kasasını ve hekim hakedişlerini karşılaştırmalı görür.
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">Şube Yöneticisi</span>, kendi
-                  şubesinin gelir-gider, ödeme planı ve raporlarını yönetir.
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">Sekreter</span>, günlük kasa
-                  girişlerini, tahsilatları ve taksit takibini yürütür.
-                </p>
-              </CardContent>
-            </Card>
-          </FadeIn>
-        </div>
-      </section>
-
-      <section className="bg-secondary/40 py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <FadeIn>
-            <div className="mb-12 text-center">
-              <Badge variant="outline" className="mb-3">
-                Güvenlik
-              </Badge>
-              <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Klinik verileriniz izole ve denetimli
-              </h2>
-              <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
-                Çok kiracılı mimari, her kliniğin verisini diğerlerinden tamamen ayırır;
-                hassas işlemler denetim kaydına düşer.
-              </p>
-            </div>
-          </FadeIn>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              {
-                icon: Building2,
-                title: "Tam veri izolasyonu",
-                desc: "Her klinik kendi organizasyon alanında çalışır, verileriniz başka kliniklerle asla karışmaz.",
-              },
-              {
-                icon: Lock,
-                title: "Denetim kaydı",
-                desc: "Ödeme planı onaylama, taksit düzenleme, hasta silme gibi kritik işlemler kim, ne zaman yaptı bilgisiyle kayıt altına alınır.",
-              },
-              {
-                icon: ShieldCheck,
-                title: "Korumalı erişim",
-                desc: "Giriş denemeleri kötüye kullanıma karşı sınırlandırılır, rol bazlı yetkilendirme her ekranda uygulanır.",
-              },
-            ].map((f, i) => (
-              <FadeIn key={f.title} delay={i * 0.05}>
-                <Card className="h-full bg-background">
-                  <CardHeader>
-                    <f.icon className="size-6 text-primary" />
-                    <CardTitle className="mt-2">{f.title}</CardTitle>
-                    <CardDescription>{f.desc}</CardDescription>
-                  </CardHeader>
-                </Card>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6">
-        <FadeIn>
-          <FlaskConical className="mx-auto size-8 text-muted-foreground" />
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight">Laboratuvar modülü</h2>
-          <p className="mt-2 text-muted-foreground">Çok yakında.</p>
-        </FadeIn>
-      </section>
-
-      <section className="mx-auto max-w-4xl px-4 pb-24 text-center sm:px-6">
-        <FadeIn>
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="flex flex-col items-center gap-4 py-10">
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Kliniğinizi bugün dijitalleştirin
-              </h2>
-              <p className="max-w-xl text-muted-foreground">
-                Dental ve Muhasebe modüllerini ayrı ayrı ya da birlikte kullanın, dilediğiniz
-                zaman yükseltin.
-              </p>
-              <Button size="lg" nativeButton={false} render={<Link href={SIGNUP_OPEN ? "/kayit" : "/giris"} />}>
-                {SIGNUP_OPEN ? "Ücretsiz Başla" : "Giriş Yap"}
-              </Button>
-            </CardContent>
-          </Card>
-        </FadeIn>
       </section>
     </div>
   );
